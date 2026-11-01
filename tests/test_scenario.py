@@ -127,8 +127,16 @@ def model(model_name: str, system: str, prompt: str) -> Any:
     return {
         "answer": "55 chairs. This changed on 9 Oct: the original order on 2 Oct was 40 chairs.",
         "citations": [
-            {"event_id": ref_for(prompt, "55 chairs"), "quote": "we need 55 chairs now"},
-            {"event_id": ref_for(prompt, "40 chairs"), "quote": "Please book 40 chairs"},
+            {
+                "event_id": ref_for(prompt, "55 chairs"),
+                "quote": "we need 55 chairs now",
+                "source_app": "Mail",
+            },
+            {
+                "event_id": ref_for(prompt, "40 chairs"),
+                "quote": "Please book 40 chairs",
+                "source_app": "Mail",
+            },
         ],
     }
 
@@ -203,6 +211,9 @@ def test_customer_scenario(tmp_path: Path) -> None:
     llm.handler = lambda m, s, p: (
         model(m, s, p)
         if s != ASK_SYSTEM
-        else {"answer": "60 chairs.", "citations": [{"event_id": "0" * 12, "quote": "60 chairs"}]}
+        else {
+            "answer": "60 chairs.",
+            "citations": [{"event_id": "0" * 12, "quote": "60 chairs", "source_app": ""}],
+        }
     )
     assert service.ask("How many chairs?", screen).answer == NO_CONTEXT

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 
 from .models import Event, normalize
 
@@ -29,6 +30,7 @@ class LineDraft:
 class CitationDraft:
     event_id: str
     quote: str
+    source_app: str
 
 
 @dataclass(frozen=True)
@@ -41,7 +43,8 @@ class GroundedLine:
 @dataclass(frozen=True)
 class Citation:
     quote: str
-    event: Event
+    source_app: str
+    occurred_at: datetime | None
 
 
 def ground_lines(
@@ -69,12 +72,24 @@ def ground_lines(
 
 
 def ground_citations(
-    citations: Sequence[CitationDraft], events: Mapping[str, Event]
+    citations: Sequence[CitationDraft],
+    events: Mapping[str, Event],
+    records: Mapping[str, str],
 ) -> list[Citation]:
-    """Citations whose event ID is known and whose quote is in that event's source_quote."""
+    """Citations whose reference is a known event or record and whose quote is found in
+    that event's source_quote or that record's text.
+
+    An event citation takes the event's app and date. A record citation takes the app the
+    model read from the record and has no date, since record fields are not parsed.
+    """
     grounded: list[Citation] = []
     for citation in citations:
         event = events.get(citation.event_id)
-        if event is not None and contains_quote(event.source_quote, citation.quote):
-            grounded.append(Citation(citation.quote, event))
+        if event is not None:
+            if contains_quote(event.source_quote, citation.quote):
+                grounded.append(Citation(citation.quote, event.source_app, event.occurred_at))
+            continue
+        record = records.get(citation.event_id)
+        if record is not None and contains_quote(record, citation.quote):
+            grounded.append(Citation(citation.quote, citation.source_app.strip(), None))
     return grounded

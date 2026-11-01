@@ -264,7 +264,9 @@ def test_each_thread_gets_its_own_store(store: Store, cfg: Config) -> None:
 def ask_reply(answer: str, *citations: tuple[Event, str]) -> dict[str, Any]:
     return {
         "answer": answer,
-        "citations": [{"event_id": event_ref(e), "quote": q} for e, q in citations],
+        "citations": [
+            {"event_id": event_ref(e), "quote": q, "source_app": ""} for e, q in citations
+        ],
     }
 
 
@@ -374,3 +376,83 @@ def test_card_and_ask_share_the_throttle_but_compile_does_not(store: Store, cfg:
     service.compile()
     service.compile()
     assert len(minimi.searches) == 3
+
+
+PO_BLOCK = "### Result 1\n- **Source:** Gmail\n- **Context:**\n\nAsha Rao: our PO number is PO-7731"
+
+
+def ask_prompt_of(llm: FakeLLM) -> str:
+    return next(str(c["prompt"]) for c in llm.calls if c["schema"] is ASK_SCHEMA)
+
+
+def record_reply(answer: str, quote: str, ref: str = "r1") -> dict[str, Any]:
+    return {
+        "answer": answer,
+        "citations": [{"event_id": ref, "quote": quote, "source_app": "Gmail"}],
+    }
+
+
+def test_detail_only_in_a_raw_block_is_answered(store: Store, cfg: Config) -> None:
+    store.save_compile(1, [], [], at(-1), [("po", PO_BLOCK)])
+    llm = FakeLLM(record_reply("The PO number is PO-7731.", "PO number is PO-7731"))
+    service, _, _ = make_service(cfg, llm)
+    result = service.ask("what is the PO number?", SCREEN)
+    assert result.status == "answered" and result.answer == "The PO number is PO-7731."
+    [source] = result.sources
+    assert describe_source(source) == "“PO number is PO-7731” · Gmail"
+    prompt = ask_prompt_of(llm)
+    assert '<record id="r1">' in prompt and "PO-7731" in prompt
+
+
+def test_records_alone_are_enough_to_call_the_model(cfg: Config) -> None:
+    store = Store.open(cfg.db_path)
+    store.create_person("Asha Rao", T0)
+    store.save_compile(1, [], [], at(-1), [("po", PO_BLOCK)])
+    llm = FakeLLM(record_reply("PO-7731.", "PO-7731"))
+    service, _, _ = make_service(cfg, llm)
+    assert service.ask("what is the PO number?", SCREEN).status == "answered"
+
+
+def test_fabricated_record_quote_is_dropped(store: Store, cfg: Config) -> None:
+    store.save_compile(1, [], [], at(-1), [("po", PO_BLOCK)])
+    for reply in (
+        record_reply("PO-9999.", "PO number is PO-9999"),
+        record_reply("PO-7731.", "PO number is PO-7731", ref="r2"),
+    ):
+        service, _, _ = make_service(cfg, FakeLLM(reply))
+        result = service.ask("what is the PO number?", SCREEN)
+        assert result.status == "no_context" and result.sources == ()
+
+
+def test_only_the_newest_blocks_are_sent_to_ask(store: Store, cfg: Config) -> None:
+    store.save_compile(1, [], [], at(-2), [(f"h{i}", f"Asha Rao: memo {i:02d}") for i in range(25)])
+    llm = FakeLLM(ask_reply("Approved.", (EVENT, "approved")))
+    service, _, _ = make_service(cfg, llm)
+    service.ask("anything new?", SCREEN)
+    prompt = ask_prompt_of(llm)
+    assert "memo 05" in prompt and "memo 24" in prompt and "memo 04" not in prompt
+    assert '<record id="r20">' in prompt and '<record id="r21">' not in prompt
+    assert prompt.index("memo 05") < prompt.index("memo 24")
+
+
+def test_another_persons_block_is_never_stored_or_sent(store: Store, cfg: Config) -> None:
+    page = minimi_page(
+        minimi_result("Karan Mehta: my salary review is next week", source="WhatsApp"),
+        minimi_result("Asha Rao: invoice goes to finance"),
+    )
+    extraction = {"events": [], "alias_proposals": []}
+    llm = FakeLLM(extraction, ask_reply("Approved.", (EVENT, "approved")))
+    service, _, _ = make_service(cfg, llm, FakeMinimi({"Asha Rao": [page]}))
+    service.ask("where do invoices go?", SCREEN)
+    assert "invoice goes to finance" in ask_prompt_of(llm)
+    assert "Karan" not in llm.prompts() and "salary" not in llm.prompts()
+    assert not any("Karan" in text for text in store.recent_blocks(1, 100))
+
+
+def test_card_prompt_contains_no_records(store: Store, cfg: Config) -> None:
+    store.save_compile(1, [], [], at(-1), [("po", PO_BLOCK)])
+    llm = FakeLLM(card_reply(line()))
+    service, _, _ = make_service(cfg, llm)
+    assert service.on_screen(SCREEN) is not None
+    [call] = card_calls(llm)
+    assert "PO-7731" not in call["prompt"] and "<records>" not in call["prompt"]

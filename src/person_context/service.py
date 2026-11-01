@@ -32,11 +32,12 @@ from .prompts import (
     ask_prompt,
     card_prompt,
     event_ref,
+    record_refs,
     screen_text,
 )
 from .retrieval import Retriever, WholeTimelineRetriever
 from .screen import ScreenContext
-from .store import Store
+from .store import BLOCK_CAP, Store
 from .trigger import HeaderMatch, header_confirmed, should_retrieve
 
 log = logging.getLogger(__name__)
@@ -190,16 +191,19 @@ class Service:
     ) -> AskResult:
         self._refresh(store, person, now)
         events = self._retriever(store).retrieve(person.id, question, screen)
-        if not events:
+        records = record_refs(store.recent_blocks(person.id, BLOCK_CAP))
+        if not events and not records:
             return AskResult("no_context", NO_CONTEXT, person, ())
         raw = self._llm.generate_json(
             self._cfg.model_answer,
             ASK_SYSTEM,
-            ask_prompt(person, events, question, now),
+            ask_prompt(person, events, records, question, now),
             ASK_SCHEMA,
         )
-        drafts = [CitationDraft(c["event_id"], c["quote"]) for c in raw["citations"]]
-        citations = ground_citations(drafts, _refs(events))
+        drafts = [
+            CitationDraft(c["event_id"], c["quote"], c["source_app"]) for c in raw["citations"]
+        ]
+        citations = ground_citations(drafts, _refs(events), records)
         if not citations:
             return AskResult("no_context", NO_CONTEXT, person, ())
         return AskResult("answered", raw["answer"], person, tuple(_source(c) for c in citations))
@@ -304,7 +308,7 @@ def _refs(events: Sequence[Event]) -> dict[str, Event]:
 
 
 def _source(citation: Citation) -> Source:
-    return Source(citation.quote, citation.event.source_app, citation.event.occurred_at)
+    return Source(citation.quote, citation.source_app, citation.occurred_at)
 
 
 def _card_line(line: GroundedLine) -> CardLine:

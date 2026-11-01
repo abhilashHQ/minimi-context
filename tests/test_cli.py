@@ -68,7 +68,10 @@ def test_compile_and_ask_commands(
     event = make_event(1, "Asha Rao: the budget is approved", occurred_at=at(0))
     store.save_compile(1, [event], [], T0)
     llm = FakeLLM(
-        {"answer": "Approved.", "citations": [{"event_id": event_ref(event), "quote": "approved"}]}
+        {
+            "answer": "Approved.",
+            "citations": [{"event_id": event_ref(event), "quote": "approved", "source_app": ""}],
+        }
     )
 
     def fake_service(cfg: object) -> Service:

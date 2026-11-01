@@ -3,6 +3,7 @@ from __future__ import annotations
 from helpers import make_event
 
 from person_context.grounding import (
+    Citation,
     CitationDraft,
     LineDraft,
     contains_quote,
@@ -56,11 +57,25 @@ def test_quote_already_on_screen_is_dropped() -> None:
     assert ground_lines(lines, EVENTS, screen) == []
 
 
-def test_ground_citations() -> None:
+def test_ground_citations_for_events() -> None:
     citations = [
-        CitationDraft("e1", "delivery Friday"),
-        CitationDraft("e2", "prefers emails"),
-        CitationDraft("e7", "delivery Friday"),
+        CitationDraft("e1", "delivery Friday", "ignored"),
+        CitationDraft("e2", "prefers emails", ""),
+        CitationDraft("e7", "delivery Friday", ""),
     ]
-    [citation] = ground_citations(citations, EVENTS)
-    assert citation.event == EVENT and citation.quote == "delivery Friday"
+    [citation] = ground_citations(citations, EVENTS, {})
+    assert citation == Citation("delivery Friday", "Mail", EVENT.occurred_at)
+
+
+RECORDS = {"r1": f"### Result 1\n- **Source:** Gmail\n{LRM}Asha Rao: the PO number is   PO-7731"}
+
+
+def test_ground_citations_for_records() -> None:
+    citations = [
+        CitationDraft("r1", "PO number is PO-7731", " Gmail "),
+        CitationDraft("r1", "PO number is PO-9999", "Gmail"),
+        CitationDraft("r2", "PO number is PO-7731", "Gmail"),
+    ]
+    assert ground_citations(citations, EVENTS, RECORDS) == [
+        Citation("PO number is PO-7731", "Gmail", None)
+    ]
