@@ -11,6 +11,7 @@ HEADER_ID = "NavigationBar_HeaderViewButton"
 MESSAGE_LIST_ID = "ChatMessagesTableView"
 MESSAGE_ID = "WAMessageBubbleTableViewCell"
 COMPOSER_ID = "ChatBar_ComposerTextView"
+CHAT_LIST_ID = "ChatListView_TableView"
 
 _SELF_PREFIX = "Your message,"
 _ENCRYPTION_NOTICE = "end-to-end encrypted"

@@ -12,7 +12,7 @@ from ApplicationServices import (
     AXUIElementSetMessagingTimeout,
 )
 
-from .screen import COMPOSER_ID, AXNode
+from .screen import CHAT_LIST_ID, COMPOSER_ID, AXNode
 
 WHATSAPP_BUNDLE_ID = "net.whatsapp.WhatsApp"
 _AX_SUCCESS = 0
@@ -39,7 +39,9 @@ def read_window(pid: int) -> AXNode | None:
     app = AXUIElementCreateApplication(pid)
     AXUIElementSetMessagingTimeout(app, _MESSAGING_TIMEOUT_SECONDS)
     window = _attribute(app, "AXFocusedWindow")
-    if window is None:
+    # While the session is locked this returns the application element, whose
+    # children include itself; reading it would exhaust the node budget every poll.
+    if window is None or _text(window, "AXRole") != "AXWindow":
         return None
     remaining = [_MAX_NODES]
     return _node(window, 0, remaining)
@@ -59,8 +61,9 @@ def _node(element: Any, depth: int, remaining: list[int]) -> AXNode:
     remaining[0] -= 1
     role = _text(element, "AXRole")
     identifier = _text(element, "AXIdentifier")
-    if identifier == COMPOSER_ID:
-        # Never read the composer: it holds the user's unsent draft.
+    if identifier in (COMPOSER_ID, CHAT_LIST_ID):
+        # Never read the composer (the unsent draft) or the chat list (other chats'
+        # previews).
         return AXNode(role=role, identifier=identifier)
     children: list[AXNode] = []
     if depth < _MAX_DEPTH:
