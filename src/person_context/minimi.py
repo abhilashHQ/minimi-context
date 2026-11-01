@@ -24,7 +24,7 @@ PROTOCOL_VERSION = "2025-06-18"
 BUDGET_WINDOW = timedelta(days=7)
 
 _RESULT_HEADING = re.compile(r"^ {0,3}#{1,6}[ \t]+Result[ \t]+\d+[ \t]*#*[ \t]*$")
-_FENCE = re.compile(r"^ {0,3}```")
+_SOURCE_PREFIX = "- **Source:**"
 _QUOTA = re.compile(
     r"\b(?:quota|limit)\s+(?:exceeded|reached|exhausted)\b|\brate[- ]limit|\btoo many requests\b",
     re.IGNORECASE,
@@ -68,24 +68,27 @@ def look_back(hours: int) -> dict[str, Any]:
 def split_results(text: str) -> list[str]:
     """Split search output into one block per result without parsing any fields.
 
-    A block starts at a `Result <number>` heading outside a ``` fence; the preamble
-    before the first one is dropped. If no boundary is found the format is unknown and
-    nothing is returned, so no unrecognised text can reach the privacy gate.
+    A block starts at a `Result <number>` heading whose next non-blank line starts with
+    `- **Source:**`. Fence state is ignored: context is raw screen text and can hold a
+    stray ``` line. The preamble before the first block is dropped. If no boundary is
+    found the format is unknown and nothing is returned, so no unrecognised text can
+    reach the privacy gate.
     """
-    blocks: list[list[str]] = []
-    in_fence = False
-    for line in text.splitlines():
-        if _FENCE.match(line):
-            in_fence = not in_fence
-        elif not in_fence and _RESULT_HEADING.match(line):
-            blocks.append([])
-        if blocks:
-            blocks[-1].append(line)
-    if not blocks:
+    lines = text.splitlines()
+    starts = [i for i, line in enumerate(lines) if _is_result_start(lines, i)]
+    if not starts:
         if text.strip():
             log.warning("mcp output has no result boundaries chars=%d", len(text))
         return []
-    return ["\n".join(lines).strip() for lines in blocks]
+    ends = starts[1:] + [len(lines)]
+    return ["\n".join(lines[start:end]).strip() for start, end in zip(starts, ends)]
+
+
+def _is_result_start(lines: list[str], index: int) -> bool:
+    if not _RESULT_HEADING.match(lines[index]):
+        return False
+    following = next((line for line in lines[index + 1 :] if line.strip()), "")
+    return following.lstrip().startswith(_SOURCE_PREFIX)
 
 
 class CallBudget:

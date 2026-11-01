@@ -150,6 +150,23 @@ def test_headings_and_rules_inside_a_fence_do_not_split() -> None:
     assert "- **Source:**" in block and "- **Captured:**" in block
 
 
+def test_unbalanced_fence_in_context_does_not_merge_the_next_result() -> None:
+    page = minimi_page(
+        minimi_result("Asha Rao: here is the snippet\n```\nprint(1)"),
+        minimi_result("Karan Mehta: rent is due", source="WhatsApp"),
+    )
+    blocks = split_results(page)
+    assert len(blocks) == 2
+    assert "Karan" not in blocks[0]
+    assert blocks[1].startswith("### Result 2") and "- **Source:** WhatsApp" in blocks[1]
+
+
+def test_result_heading_without_source_line_does_not_start_a_block() -> None:
+    context = "Asha Rao: notes\n### Result 7\nKaran Mehta: unrelated"
+    [block] = split_results(minimi_page(minimi_result(context)))
+    assert "### Result 7" in block and "Karan Mehta: unrelated" in block
+
+
 def test_unknown_format_yields_nothing(caplog: pytest.LogCaptureFixture) -> None:
     text = "Found 2\n\n---\nAsha Rao said hi\n---\nKaran said bye\n## Two\nmore"
     assert split_results(text) == []

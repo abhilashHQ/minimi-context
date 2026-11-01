@@ -352,3 +352,17 @@ def test_unknown_format_yields_nothing_and_no_llm_call(store: Store, cfg: Config
     result = run(store, cfg, FakeMinimi({"Asha Rao": [unknown]}), llm)
     assert result.outcome == "nothing_new" and llm.calls == []
     assert store.watermark(1) is None
+
+
+def test_unbalanced_fence_does_not_let_another_persons_result_reach_llm(
+    store: Store, cfg: Config
+) -> None:
+    page = minimi_page(
+        minimi_result("Asha Rao: pasted a log\n```\nerror 42", captured="2026-09-29 10:00"),
+        KARAN_RESULT,
+    )
+    llm = FakeLLM(extraction())
+    result = run(store, cfg, FakeMinimi({"Asha Rao": [page]}), llm)
+    assert result.blocks_passed == 1 and result.blocks_dropped == 1
+    assert "Asha Rao: pasted a log" in llm.prompts()
+    assert "Karan" not in llm.prompts() and "salary" not in llm.prompts()
