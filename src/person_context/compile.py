@@ -27,6 +27,9 @@ from .store import Store
 log = logging.getLogger(__name__)
 
 FIRST_RUN_LOOK_BACK = timedelta(days=14)
+# time_range filters on capture time, and minimi writes a memory a few minutes after
+# its capture, so each look-back reaches an hour behind the watermark.
+LOOK_BACK_OVERLAP_HOURS = 1
 MAX_PAGES = 3
 
 OpenMinimi = Callable[[Store], AbstractContextManager[MinimiClient]]
@@ -126,8 +129,12 @@ def _compile(
     person: Person,
     run_started: datetime,
 ) -> CompileResult:
-    since = store.watermark(person.id) or run_started - FIRST_RUN_LOOK_BACK
-    hours = max(1, math.ceil((run_started - since).total_seconds() / 3600))
+    watermark = store.watermark(person.id)
+    if watermark is None:
+        hours = math.ceil(FIRST_RUN_LOOK_BACK.total_seconds() / 3600)
+    else:
+        elapsed = (run_started - watermark).total_seconds() / 3600
+        hours = max(0, math.ceil(elapsed)) + LOOK_BACK_OVERLAP_HOURS
     aliases = [alias for alias in store.aliases(person.id) if alias.status == "confirmed"]
 
     blocks = _search(minimi, aliases, hours)

@@ -206,7 +206,17 @@ def test_paging_alias_dedupe_and_look_back_from_watermark(store: Store, cfg: Con
         ("Asha Rao", "2"),
         ("asha@example.com", None),
     ]
-    assert minimi.searches[0]["time_range"] == {"last": {"hours": 3}}
+    assert minimi.searches[0]["time_range"] == {"last": {"hours": 4}}
+
+
+@pytest.mark.parametrize(("elapsed", "hours"), [(0, 1), (0.25, 2), (1, 2), (6, 7), (6.01, 8)])
+def test_look_back_adds_one_hour_of_overlap(
+    store: Store, cfg: Config, elapsed: float, hours: int
+) -> None:
+    store.save_compile(1, [], [], at(-elapsed))
+    minimi = FakeMinimi()
+    run(store, cfg, minimi, FakeLLM())
+    assert minimi.searches[0]["time_range"] == {"last": {"hours": hours}}
 
 
 def test_alias_proposals_need_grounded_evidence(store: Store, cfg: Config) -> None:
