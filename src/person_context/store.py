@@ -65,7 +65,15 @@ _MIGRATIONS: tuple[str, ...] = (
         PRIMARY KEY (person_id, hash)
     );
     """,
+    """
+    ALTER TABLE seen_block ADD COLUMN text TEXT;
+    ALTER TABLE seen_block ADD COLUMN saved_at TEXT;
+    """,
 )
+
+# Raw text is kept for this many of a person's newest blocks; older rows keep only their
+# hash, so they still deduplicate.
+BLOCK_CAP = 20
 
 
 class PersonExists(Exception):
@@ -199,10 +207,11 @@ class Store:
         events: Sequence[Event],
         proposals: Sequence[Alias],
         watermark: datetime,
-        block_hashes: Sequence[str] = (),
+        blocks: Sequence[tuple[str, str]] = (),
     ) -> tuple[int, int]:
-        """Store events, alias proposals and the hashes of the blocks they came from, then
-        advance the watermark, all in one transaction.
+        """Store events, alias proposals and the (hash, text) of the blocks they came from,
+        then advance the watermark, all in one transaction. Only the newest BLOCK_CAP blocks
+        of the person keep their text.
 
         Returns (events added, proposals added). Existing events and aliases, including
         rejected ones, are left untouched.
@@ -243,9 +252,16 @@ class Store:
                 )
                 proposals_added += cursor.rowcount
             conn.executemany(
-                "INSERT INTO seen_block (person_id, hash) VALUES (?, ?)"
+                "INSERT INTO seen_block (person_id, hash, text, saved_at) VALUES (?, ?, ?, ?)"
                 " ON CONFLICT(person_id, hash) DO NOTHING",
-                [(person_id, block_hash) for block_hash in block_hashes],
+                [(person_id, block_hash, text, _ts(watermark)) for block_hash, text in blocks],
+            )
+            conn.execute(
+                "UPDATE seen_block SET text = NULL"
+                " WHERE person_id = ? AND text IS NOT NULL AND rowid NOT IN ("
+                " SELECT rowid FROM seen_block WHERE person_id = ? AND text IS NOT NULL"
+                " ORDER BY saved_at DESC, rowid DESC LIMIT ?)",
+                (person_id, person_id, BLOCK_CAP),
             )
             conn.execute(
                 "INSERT INTO compile_state (key, value) VALUES (?, ?)"
@@ -259,6 +275,15 @@ class Store:
             "SELECT hash FROM seen_block WHERE person_id = ?", (person_id,)
         ).fetchall()
         return {str(row["hash"]) for row in rows}
+
+    def recent_blocks(self, person_id: int, limit: int) -> list[str]:
+        """Text of the person's newest stored blocks, oldest first."""
+        rows = self._conn.execute(
+            "SELECT text FROM seen_block WHERE person_id = ? AND text IS NOT NULL"
+            " ORDER BY saved_at DESC, rowid DESC LIMIT ?",
+            (person_id, limit),
+        ).fetchall()
+        return [str(row["text"]) for row in reversed(rows)]
 
     def last_refresh(self, person_id: int) -> datetime | None:
         row = self._conn.execute(

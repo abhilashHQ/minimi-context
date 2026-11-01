@@ -20,15 +20,15 @@ def store(tmp_path: Path) -> Store:
 def test_migrations_and_wal(tmp_path: Path) -> None:
     path = tmp_path / "context.db"
     store = Store.open(path)
-    assert store.schema_version() == 2
+    assert store.schema_version() == 3
     store.close()
     reopened = Store.open(path)
-    assert reopened.schema_version() == 2
+    assert reopened.schema_version() == 3
     mode = sqlite3.connect(str(path)).execute("PRAGMA journal_mode").fetchone()[0]
     assert mode == "wal"
 
 
-def test_migration_2_upgrades_an_existing_database(
+def test_migrations_upgrade_an_existing_database(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     path = tmp_path / "context.db"
@@ -38,11 +38,35 @@ def test_migration_2_upgrades_an_existing_database(
         assert old.schema_version() == 1
         person = old.create_person("Asha Rao", T0)
         old.close()
+    with monkeypatch.context() as patch:
+        patch.setattr(store_module, "_MIGRATIONS", store_module._MIGRATIONS[:2])
+        v2 = Store.open(path)
+        assert v2.schema_version() == 2
+        v2._conn.execute("INSERT INTO seen_block (person_id, hash) VALUES (?, 'old')", (person.id,))
+        v2.close()
     upgraded = Store.open(path)
-    assert upgraded.schema_version() == 2
-    upgraded.save_compile(person.id, [], [], at(1), ["abc", "abc", "def"])
-    assert upgraded.seen_block_hashes(person.id) == {"abc", "def"}
+    assert upgraded.schema_version() == 3
+    upgraded.save_compile(
+        person.id, [], [], at(1), [("abc", "Asha A"), ("abc", "x"), ("def", "Asha D")]
+    )
+    assert upgraded.seen_block_hashes(person.id) == {"old", "abc", "def"}
+    assert upgraded.recent_blocks(person.id, 20) == ["Asha A", "Asha D"]
     assert upgraded.list_people() == [person]
+
+
+def test_only_the_newest_blocks_keep_text(store: Store) -> None:
+    person = store.create_person("Asha Rao", T0)
+    store.save_compile(person.id, [], [], at(1), [(f"h{i}", f"block {i}") for i in range(15)])
+    store.save_compile(person.id, [], [], at(2), [(f"h{i}", f"block {i}") for i in range(15, 30)])
+    newest = [f"block {i}" for i in range(10, 30)]
+    assert store_module.BLOCK_CAP == 20
+    assert store.recent_blocks(person.id, 20) == newest
+    assert store.recent_blocks(person.id, 3) == newest[-3:]
+    assert len(store.seen_block_hashes(person.id)) == 30
+    nulls = store._conn.execute(
+        "SELECT COUNT(*) FROM seen_block WHERE person_id = ? AND text IS NULL", (person.id,)
+    ).fetchone()[0]
+    assert nulls == 10
 
 
 def test_create_person_has_confirmed_name_alias(store: Store) -> None:

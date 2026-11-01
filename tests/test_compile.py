@@ -366,3 +366,22 @@ def test_unbalanced_fence_does_not_let_another_persons_result_reach_llm(
     assert result.blocks_passed == 1 and result.blocks_dropped == 1
     assert "Asha Rao: pasted a log" in llm.prompts()
     assert "Karan" not in llm.prompts() and "salary" not in llm.prompts()
+
+
+def test_only_gated_blocks_are_stored_and_evicted_blocks_still_dedupe(
+    store: Store, cfg: Config
+) -> None:
+    run(store, cfg, FakeMinimi({"Asha Rao": [PAGE]}), FakeLLM(extraction(GOOD)), hours=1)
+    [stored] = store.recent_blocks(1, 20)
+    assert "Asha Rao: We'd like 40 units" in stored and "- **Source:** Mail" in stored
+    assert len(store.seen_block_hashes(1)) == 1
+    texts = store._conn.execute("SELECT text FROM seen_block").fetchall()
+    assert not any("Karan" in (row[0] or "") for row in texts)
+
+    many = minimi_page(*[minimi_result(f"Asha Rao: note {i}") for i in range(25)])
+    run(store, cfg, FakeMinimi({"Asha Rao": [many]}), FakeLLM(extraction()), hours=2)
+    recent = store.recent_blocks(1, 20)
+    assert len(recent) == 20 and "note 24" in recent[-1] and "note 5" in recent[0]
+    llm = FakeLLM()
+    rerun = run(store, cfg, FakeMinimi({"Asha Rao": [PAGE, many]}), llm, hours=3)
+    assert rerun.outcome == "nothing_new" and llm.calls == []

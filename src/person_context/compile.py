@@ -162,7 +162,7 @@ def _compile(
         store.aliases(person.id),
     )
     events_added, proposals_added = store.save_compile(
-        person.id, grounded, proposals, run_started, [block_hash(b) for b in new_blocks]
+        person.id, grounded, proposals, run_started, [(block_hash(b), b) for b in new_blocks]
     )
     return CompileResult(
         person.id,
