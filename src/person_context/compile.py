@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import fcntl
+import hashlib
 import logging
 import math
 import time
@@ -131,36 +132,44 @@ def _compile(
 
     blocks = _search(minimi, aliases, hours)
     gated = gate(blocks, aliases)
-    if not gated.passed:
+    seen = store.seen_block_hashes(person.id)
+    new_blocks = [block for block in gated.passed if block_hash(block) not in seen]
+    if not new_blocks:
         return CompileResult(person.id, "nothing_new", blocks_dropped=gated.dropped)
 
     raw = llm.generate_json(
         cfg.model_compile,
         COMPILE_SYSTEM,
-        compile_prompt(person, aliases, gated.passed),
+        compile_prompt(person, aliases, new_blocks),
         COMPILE_SCHEMA,
     )
     events = [_event(person.id, item, run_started) for item in raw["events"]]
-    grounded = [e for e in events if e.text.strip() and quote_in_any(e.source_quote, gated.passed)]
+    grounded = [e for e in events if e.text.strip() and quote_in_any(e.source_quote, new_blocks)]
     proposals = accept_proposals(
         person.id,
         [
             ProposalDraft(item["value"], cast(AliasKind, item["kind"]), item["evidence_quote"])
             for item in raw["alias_proposals"]
         ],
-        gated.passed,
+        new_blocks,
         store.aliases(person.id),
     )
-    events_added, proposals_added = store.save_compile(person.id, grounded, proposals, run_started)
+    events_added, proposals_added = store.save_compile(
+        person.id, grounded, proposals, run_started, [block_hash(b) for b in new_blocks]
+    )
     return CompileResult(
         person.id,
         "stored",
         events_added=events_added,
         proposals_added=proposals_added,
-        blocks_passed=len(gated.passed),
+        blocks_passed=len(new_blocks),
         blocks_dropped=gated.dropped,
         events_dropped=len(events) - len(grounded),
     )
+
+
+def block_hash(block: str) -> str:
+    return hashlib.sha256(normalize(block).encode("utf-8")).hexdigest()
 
 
 def _search(minimi: MinimiClient, aliases: Sequence[Alias], hours: int) -> list[str]:

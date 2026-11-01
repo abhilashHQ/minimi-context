@@ -58,6 +58,13 @@ _MIGRATIONS: tuple[str, ...] = (
     );
     CREATE INDEX mcp_calls_time ON mcp_calls(called_at);
     """,
+    """
+    CREATE TABLE seen_block (
+        person_id INTEGER NOT NULL REFERENCES person(id),
+        hash TEXT NOT NULL,
+        PRIMARY KEY (person_id, hash)
+    );
+    """,
 )
 
 
@@ -188,8 +195,10 @@ class Store:
         events: Sequence[Event],
         proposals: Sequence[Alias],
         watermark: datetime,
+        block_hashes: Sequence[str] = (),
     ) -> tuple[int, int]:
-        """Store events and alias proposals, then advance the watermark, in one transaction.
+        """Store events, alias proposals and the hashes of the blocks they came from, then
+        advance the watermark, all in one transaction.
 
         Returns (events added, proposals added). Existing events and aliases, including
         rejected ones, are left untouched.
@@ -229,12 +238,23 @@ class Store:
                     ),
                 )
                 proposals_added += cursor.rowcount
+            conn.executemany(
+                "INSERT INTO seen_block (person_id, hash) VALUES (?, ?)"
+                " ON CONFLICT(person_id, hash) DO NOTHING",
+                [(person_id, block_hash) for block_hash in block_hashes],
+            )
             conn.execute(
                 "INSERT INTO compile_state (key, value) VALUES (?, ?)"
                 " ON CONFLICT(key) DO UPDATE SET value = excluded.value",
                 (_watermark_key(person_id), _ts(watermark)),
             )
         return events_added, proposals_added
+
+    def seen_block_hashes(self, person_id: int) -> set[str]:
+        rows = self._conn.execute(
+            "SELECT hash FROM seen_block WHERE person_id = ?", (person_id,)
+        ).fetchall()
+        return {str(row["hash"]) for row in rows}
 
     def watermark(self, person_id: int) -> datetime | None:
         row = self._conn.execute(

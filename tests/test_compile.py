@@ -102,10 +102,33 @@ def test_other_persons_block_never_reaches_llm(store: Store, cfg: Config) -> Non
 def test_idempotent(store: Store, cfg: Config) -> None:
     minimi = FakeMinimi({"Asha Rao": [PAGE]})
     assert run(store, cfg, minimi, FakeLLM(extraction(GOOD)), hours=1).events_added == 1
-    second = run(store, cfg, minimi, FakeLLM(extraction(GOOD, GOOD)), hours=2)
-    assert second.outcome == "stored" and second.events_added == 0
+    rerun_llm = FakeLLM(extraction(event("We'd like 40 units")))
+    second = run(store, cfg, minimi, rerun_llm, hours=2)
+    assert second.outcome == "nothing_new" and rerun_llm.calls == []
     assert store.event_count(1) == 1
+    assert store.watermark(1) == at(1)
+
+
+def test_only_unseen_blocks_reach_llm_and_same_quote_is_not_duplicated(
+    store: Store, cfg: Config
+) -> None:
+    run(store, cfg, FakeMinimi({"Asha Rao": [PAGE]}), FakeLLM(extraction(GOOD)), hours=1)
+    fresh = minimi_result(f"{ASHA_CONTEXT}\nAsha Rao: also, Friday works", captured="2026-09-30")
+    llm = FakeLLM(extraction(GOOD))
+    result = run(store, cfg, FakeMinimi({"Asha Rao": [minimi_page(ASHA_RESULT, fresh)]}), llm, 2)
+    assert result.outcome == "stored" and result.blocks_passed == 1
+    assert result.events_added == 0 and store.event_count(1) == 1
+    assert "Friday works" in llm.prompts() and "2026-09-28 14:02" not in llm.prompts()
     assert store.watermark(1) == at(2)
+
+
+def test_failed_run_leaves_blocks_unseen(store: Store, cfg: Config) -> None:
+    minimi = FakeMinimi({"Asha Rao": [PAGE]})
+    assert run(store, cfg, minimi, FakeLLM(LLMUnavailable("down"))).outcome == "failed"
+    assert store.seen_block_hashes(1) == set()
+    llm = FakeLLM(extraction(GOOD))
+    assert run(store, cfg, minimi, llm, hours=1).events_added == 1
+    assert len(llm.calls) == 1 and len(store.seen_block_hashes(1)) == 1
 
 
 def test_fabricated_quote_is_dropped(store: Store, cfg: Config) -> None:

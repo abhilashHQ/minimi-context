@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from helpers import T0, at, make_event
 
+from person_context import store as store_module
 from person_context.models import Alias
 from person_context.store import PersonExists, Store
 
@@ -19,12 +20,29 @@ def store(tmp_path: Path) -> Store:
 def test_migrations_and_wal(tmp_path: Path) -> None:
     path = tmp_path / "context.db"
     store = Store.open(path)
-    assert store.schema_version() == 1
+    assert store.schema_version() == 2
     store.close()
     reopened = Store.open(path)
-    assert reopened.schema_version() == 1
+    assert reopened.schema_version() == 2
     mode = sqlite3.connect(str(path)).execute("PRAGMA journal_mode").fetchone()[0]
     assert mode == "wal"
+
+
+def test_migration_2_upgrades_an_existing_database(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "context.db"
+    with monkeypatch.context() as patch:
+        patch.setattr(store_module, "_MIGRATIONS", store_module._MIGRATIONS[:1])
+        old = Store.open(path)
+        assert old.schema_version() == 1
+        person = old.create_person("Asha Rao", T0)
+        old.close()
+    upgraded = Store.open(path)
+    assert upgraded.schema_version() == 2
+    upgraded.save_compile(person.id, [], [], at(1), ["abc", "abc", "def"])
+    assert upgraded.seen_block_hashes(person.id) == {"abc", "def"}
+    assert upgraded.list_people() == [person]
 
 
 def test_create_person_has_confirmed_name_alias(store: Store) -> None:
