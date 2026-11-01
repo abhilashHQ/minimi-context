@@ -83,6 +83,7 @@ class ContextPanel:
         self._on_resolve_alias = on_resolve_alias
         self._card: Card | None = None
         self._title = ""
+        self._question = ""
         self._answer: list[str] = []
         self._busy = False
         self._timer: Any = None
@@ -140,19 +141,24 @@ class ContextPanel:
             return
         self._card = card
         self._title = card.person.display_name
+        self._question = ""
         self._answer = []
         self._render()
         self._panel.orderFrontRegardless()
         self._arm_auto_hide()
 
     def toggle_ask(self, person_name: str | None) -> None:
-        if self._panel.isVisible():
+        """Hide if in use; focus the Ask field if visible but unfocused, keeping the card;
+        otherwise open an empty Ask panel."""
+        if self._panel.isVisible() and self._panel.isKeyWindow():
             self.hide()
             return
-        self._card = None
-        self._title = person_name or "Ask"
-        self._answer = []
-        self._render()
+        if not self._panel.isVisible():
+            self._card = None
+            self._title = person_name or "Ask"
+            self._question = ""
+            self._answer = []
+            self._render()
         self._panel.makeKeyAndOrderFront_(None)
         self._panel.makeFirstResponder_(self._field)
         self._arm_auto_hide()
@@ -161,6 +167,8 @@ class ContextPanel:
         self._busy = False
         self._answer = [result.answer] + [describe_source(s) for s in result.sources]
         self._render()
+        if self._panel.isKeyWindow():
+            self._panel.makeFirstResponder_(self._field)
         self._arm_auto_hide()
 
     def hide(self) -> None:
@@ -176,6 +184,7 @@ class ContextPanel:
         if not question or self._busy:
             return
         self._busy = True
+        self._question = question
         self._answer = [WORKING]
         self._render()
         self._on_ask(question)
@@ -207,6 +216,12 @@ class ContextPanel:
                 )
             if self._card.pending_alias is not None:
                 self._add(self._alias_row(self._card.pending_alias))
+        if self._question:
+            self._add(
+                _label(
+                    self._question, NSFont.systemFontOfSize_(11.0), NSColor.secondaryLabelColor()
+                )
+            )
         for index, text in enumerate(self._answer):
             font = NSFont.systemFontOfSize_(13.0 if index == 0 else 11.0)
             color = NSColor.labelColor() if index == 0 else NSColor.secondaryLabelColor()
