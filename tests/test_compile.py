@@ -1,0 +1,276 @@
+from __future__ import annotations
+
+from datetime import timezone
+from pathlib import Path
+from typing import Any
+
+import pytest
+from fakes import FakeLLM, FakeMinimi, FakeMinimiFactory
+from helpers import T0, at, make_config
+
+from person_context.compile import (
+    CompileLocked,
+    compile_all,
+    compile_lock,
+    parse_timestamp,
+)
+from person_context.config import Config
+from person_context.llm import LLMUnavailable
+from person_context.minimi import MinimiError
+from person_context.models import Alias, normalize
+from person_context.prompts import COMPILE_SCHEMA
+from person_context.store import Store
+
+ASHA_BLOCK = (
+    "### Mail, 2026-09-28 14:02\nFrom: Asha Rao <asha@example.com>\n"
+    "Asha Rao: We'd like 40 units, delivered by Friday."
+)
+KARAN_BLOCK = "### WhatsApp, Karan Mehta\nKaran Mehta: my salary review is next week, keep it quiet"
+PAGE = f"Found 2 results\n\n---\n{ASHA_BLOCK}\n---\n{KARAN_BLOCK}\n"
+
+
+def extraction(
+    *events: dict[str, str], proposals: list[dict[str, str]] | None = None
+) -> dict[str, Any]:
+    return {"events": list(events), "alias_proposals": proposals or []}
+
+
+def event(quote: str, **extra: str) -> dict[str, str]:
+    item = {
+        "text": "Asha wants 40 units by Friday.",
+        "source_quote": quote,
+        "occurred_at": "2026-09-28T14:02:00Z",
+        "source_app": "Mail",
+        "source_thread": "Order",
+        "speaker": "them",
+    }
+    item.update(extra)
+    return item
+
+
+GOOD = event("We'd like 40 units, delivered by Friday.")
+
+
+@pytest.fixture
+def cfg(tmp_path: Path) -> Config:
+    return make_config(tmp_path / "context.db")
+
+
+@pytest.fixture
+def store(cfg: Config) -> Store:
+    store = Store.open(cfg.db_path)
+    store.create_person("Asha Rao", T0)
+    return store
+
+
+def run(
+    store: Store,
+    cfg: Config,
+    minimi: FakeMinimi,
+    llm: FakeLLM,
+    hours: float = 0,
+    limit: int | None = None,
+) -> Any:
+    factory = FakeMinimiFactory(minimi, weekly_limit=limit)
+    [result] = compile_all(store, factory, llm, cfg, at(hours))
+    return result
+
+
+def test_stores_grounded_events_and_advances_watermark(store: Store, cfg: Config) -> None:
+    llm = FakeLLM(extraction(GOOD))
+    result = run(store, cfg, FakeMinimi({"Asha Rao": [PAGE]}), llm, hours=1)
+    assert result.outcome == "stored" and result.events_added == 1
+    assert result.blocks_passed == 1 and result.blocks_dropped == 2
+    [stored] = store.timeline(1, 300)
+    assert stored.source_quote == GOOD["source_quote"]
+    assert stored.occurred_at == at(0).replace(month=9, day=28, hour=14, minute=2)
+    assert stored.speaker == "them" and stored.source_app == "Mail"
+    assert store.watermark(1) == at(1)
+    assert llm.calls[0]["model"] == "compile-model"
+    assert llm.calls[0]["schema"] is COMPILE_SCHEMA
+
+
+def test_other_persons_block_never_reaches_llm(store: Store, cfg: Config) -> None:
+    llm = FakeLLM(extraction(GOOD))
+    run(store, cfg, FakeMinimi({"Asha Rao": [PAGE]}), llm)
+    assert "Karan" not in llm.prompts()
+    assert "salary" not in llm.prompts()
+    assert "Asha Rao: We'd like 40 units" in llm.prompts()
+
+
+def test_idempotent(store: Store, cfg: Config) -> None:
+    minimi = FakeMinimi({"Asha Rao": [PAGE]})
+    assert run(store, cfg, minimi, FakeLLM(extraction(GOOD)), hours=1).events_added == 1
+    second = run(store, cfg, minimi, FakeLLM(extraction(GOOD, GOOD)), hours=2)
+    assert second.outcome == "stored" and second.events_added == 0
+    assert store.event_count(1) == 1
+    assert store.watermark(1) == at(2)
+
+
+def test_fabricated_quote_is_dropped(store: Store, cfg: Config) -> None:
+    fabricated = event("We'd like 400 units, delivered tomorrow.")
+    result = run(
+        store, cfg, FakeMinimi({"Asha Rao": [PAGE]}), FakeLLM(extraction(GOOD, fabricated))
+    )
+    assert result.events_added == 1 and result.events_dropped == 1
+    assert [e.source_quote for e in store.timeline(1, 300)] == [GOOD["source_quote"]]
+
+
+def test_quote_from_a_gated_out_block_is_dropped(store: Store, cfg: Config) -> None:
+    leaked = event("my salary review is next week")
+    result = run(store, cfg, FakeMinimi({"Asha Rao": [PAGE]}), FakeLLM(extraction(leaked)))
+    assert result.events_added == 0 and result.events_dropped == 1
+
+
+def test_empty_results_leave_watermark_and_skip_llm(store: Store, cfg: Config) -> None:
+    llm = FakeLLM()
+    for pages in ({}, {"Asha Rao": [f"---\n{KARAN_BLOCK}\n---\nnothing"]}):
+        result = run(store, cfg, FakeMinimi(pages), llm)
+        assert result.outcome == "nothing_new"
+    assert llm.calls == []
+    assert store.watermark(1) is None
+
+
+def test_llm_failure_leaves_watermark(store: Store, cfg: Config) -> None:
+    result = run(store, cfg, FakeMinimi({"Asha Rao": [PAGE]}), FakeLLM(LLMUnavailable("down")))
+    assert result.outcome == "failed" and result.error == "LLMUnavailable"
+    assert store.watermark(1) is None and store.event_count(1) == 0
+
+
+def test_minimi_failure_leaves_watermark(store: Store, cfg: Config) -> None:
+    llm = FakeLLM()
+    result = run(store, cfg, FakeMinimi(error=MinimiError("tool error")), llm)
+    assert result.outcome == "failed" and llm.calls == []
+    assert store.watermark(1) is None
+
+
+def test_budget_exceeded(store: Store, cfg: Config) -> None:
+    store.record_mcp_call("search_memory", T0)
+    minimi = FakeMinimi({"Asha Rao": [PAGE]})
+    llm = FakeLLM()
+    result = run(store, cfg, minimi, llm, limit=1)
+    assert result.outcome == "failed" and result.error == "BudgetExceeded"
+    assert minimi.searches == [] and llm.calls == []
+    assert store.watermark(1) is None
+
+
+def test_first_run_looks_back_14_days(store: Store, cfg: Config) -> None:
+    minimi = FakeMinimi()
+    run(store, cfg, minimi, FakeLLM())
+    assert minimi.searches[0]["time_range"] == {"last": {"hours": 14 * 24}}
+
+
+def test_paging_alias_dedupe_and_look_back_from_watermark(store: Store, cfg: Config) -> None:
+    store.save_compile(
+        1,
+        [],
+        [
+            Alias(1, "asha rao", "name", "proposed", "asha rao"),
+            Alias(1, "asha@example.com", "email", "proposed", "x"),
+            Alias(1, "Acme", "company", "proposed", "x"),
+        ],
+        at(-2.5),
+    )
+    store.set_alias_status(1, "Acme", "rejected")
+    minimi = FakeMinimi({"Asha Rao": ["p1", "p2", "p3", "p4"]})
+    run(store, cfg, minimi, FakeLLM())
+    assert [(s["query"], s["cursor"]) for s in minimi.searches] == [
+        ("Asha Rao", None),
+        ("Asha Rao", "1"),
+        ("Asha Rao", "2"),
+        ("asha@example.com", None),
+    ]
+    assert minimi.searches[0]["time_range"] == {"last": {"hours": 3}}
+
+
+def test_alias_proposals_need_grounded_evidence(store: Store, cfg: Config) -> None:
+    proposals = [
+        {
+            "value": "asha@example.com",
+            "kind": "email",
+            "evidence_quote": "From: Asha Rao <asha@example.com>",
+        },
+        {"value": "Acme Corp", "kind": "company", "evidence_quote": "Asha Rao works at Acme Corp"},
+        {"value": "+1 555 0100", "kind": "phone", "evidence_quote": "We'd like 40 units"},
+    ]
+    result = run(
+        store, cfg, FakeMinimi({"Asha Rao": [PAGE]}), FakeLLM(extraction(GOOD, proposals=proposals))
+    )
+    assert result.proposals_added == 1
+    statuses = {a.value: a.status for a in store.aliases(1)}
+    assert statuses == {"Asha Rao": "confirmed", "asha@example.com": "proposed"}
+
+
+def test_proposed_alias_extends_search_and_rejected_alias_stops_gate(
+    store: Store, cfg: Config
+) -> None:
+    email_only = "---\nFrom: asha@example.com\nShipping address changed to Pune\n---\nfooter"
+    proposals = [
+        {"value": "asha@example.com", "kind": "email", "evidence_quote": "<asha@example.com>"}
+    ]
+    run(
+        store,
+        cfg,
+        FakeMinimi({"Asha Rao": [PAGE]}),
+        FakeLLM(extraction(GOOD, proposals=proposals)),
+        hours=1,
+    )
+
+    minimi = FakeMinimi({"asha@example.com": [email_only]})
+    llm = FakeLLM(extraction())
+    run(store, cfg, minimi, llm, hours=2)
+    assert [s["query"] for s in minimi.searches] == ["Asha Rao", "asha@example.com"]
+    assert "Shipping address changed to Pune" in llm.prompts()
+
+    assert store.set_alias_status(1, "asha@example.com", "rejected")
+    minimi.searches.clear()
+    llm = FakeLLM()
+    result = run(store, cfg, minimi, llm, hours=3)
+    assert [s["query"] for s in minimi.searches] == ["Asha Rao"]
+    assert result.outcome == "nothing_new" and llm.calls == []
+
+    again = [
+        {"value": "ASHA@example.com", "kind": "email", "evidence_quote": "From: asha@example.com"}
+    ]
+    minimi = FakeMinimi({"Asha Rao": ["---\nAsha Rao\nFrom: asha@example.com\n---\nx"]})
+    result = run(store, cfg, minimi, FakeLLM(extraction(proposals=again)), hours=4)
+    assert result.proposals_added == 0
+    assert {a.value: a.status for a in store.aliases(1)}["asha@example.com"] == "rejected"
+
+
+def test_compile_lock_prevents_overlap(store: Store, cfg: Config) -> None:
+    llm = FakeLLM()
+    with compile_lock(cfg.db_path):
+        with pytest.raises(CompileLocked):
+            compile_all(store, FakeMinimiFactory(FakeMinimi()), llm, cfg, T0)
+    assert (
+        compile_all(store, FakeMinimiFactory(FakeMinimi()), llm, cfg, T0)[0].outcome
+        == "nothing_new"
+    )
+
+
+def test_one_minimi_batch_for_all_people(store: Store, cfg: Config) -> None:
+    store.create_person("Karan Mehta", T0)
+    factory = FakeMinimiFactory(FakeMinimi())
+    results = compile_all(store, factory, FakeLLM(), cfg, T0)
+    assert [r.person_id for r in results] == [1, 2]
+    assert factory.batches == 1
+
+
+def test_parse_timestamp() -> None:
+    assert parse_timestamp("2026-09-28T14:02:00Z") == at(0).replace(
+        month=9, day=28, hour=14, minute=2
+    )
+    assert parse_timestamp("2026-09-28") == at(0).replace(month=9, day=28, hour=0)
+    offset = parse_timestamp("2026-09-28T19:32:00+05:30")
+    assert offset is not None and offset.astimezone(timezone.utc).hour == 14
+    assert parse_timestamp("") is None
+    assert parse_timestamp("last Tuesday") is None
+
+
+def test_normalized_quotes_match_blocks(store: Store, cfg: Config) -> None:
+    lrm = "\N{LEFT-TO-RIGHT MARK}"
+    quote = f"{lrm}we'd LIKE 40 units,   delivered by friday."
+    result = run(store, cfg, FakeMinimi({"Asha Rao": [PAGE]}), FakeLLM(extraction(event(quote))))
+    assert result.events_added == 1
+    assert normalize(store.timeline(1, 1)[0].source_quote) == normalize(GOOD["source_quote"])

@@ -25,6 +25,11 @@ class Decision:
     reason: str
 
 
+def header_confirmed(match: HeaderMatch) -> bool:
+    header = normalize(match.header)
+    return any(a.status == "confirmed" and normalize(a.value) == header for a in match.aliases)
+
+
 def should_retrieve(
     person: HeaderMatch | None,
     now: datetime,
@@ -34,8 +39,7 @@ def should_retrieve(
 ) -> Decision:
     if person is None:
         return Decision(False, "untracked")
-    header = normalize(person.header)
-    if not any(a.status == "confirmed" and normalize(a.value) == header for a in person.aliases):
+    if not header_confirmed(person):
         return Decision(False, "unconfirmed")
     if last_seen_at is not None and now - last_seen_at < timedelta(hours=cfg.gap_hours):
         return Decision(False, "no_gap")
