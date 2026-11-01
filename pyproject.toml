@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "person-context"
+version = "0.1.0"
+description = "A person context layer on top of minimi"
+requires-python = ">=3.9"
+dependencies = [
+    "pyobjc-core; sys_platform == 'darwin'",
+    "pyobjc-framework-Cocoa; sys_platform == 'darwin'",
+    "pyobjc-framework-ApplicationServices; sys_platform == 'darwin'",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff", "mypy"]
+
+[project.scripts]
+person-context = "person_context.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "tests"]
+
+[tool.ruff]
+target-version = "py39"
+line-length = 100
+extend-exclude = [".venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+
+[tool.mypy]
+python_version = "3.9"
+mypy_path = "src"
+
+# The macOS files are excluded from type checking; cli.py imports app lazily,
+# so mypy must not follow that import into pyobjc.
+[[tool.mypy.overrides]]
+module = ["person_context.app", "person_context.ui_panel", "person_context.ax_macos"]
+follow_imports = "skip"
