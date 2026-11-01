@@ -1,0 +1,114 @@
+{
+  "scenario": "b",
+  "description": "Scenario A plus m10. Fictional test corpus. All times are Asia/Kolkata (IST, +05:30). Messages are listed in ingest order.",
+  "now": "2026-11-13T17:00:00+05:30",
+  "conversations": [
+    {
+      "app": "gmail",
+      "key": "friday-dinner",
+      "title": "Friday dinner"
+    },
+    {
+      "app": "whatsapp_web",
+      "key": "sam",
+      "title": "Sam"
+    },
+    {
+      "app": "gmail",
+      "key": "investor-deck",
+      "title": "Investor deck"
+    }
+  ],
+  "messages": [
+    {
+      "label": "m6",
+      "app": "gmail",
+      "thread": "friday-dinner",
+      "sender": "Sam",
+      "sent_at": "2026-11-11T10:15:00+05:30",
+      "date_source": "absolute",
+      "body": "Can we do 9:30 on Friday instead of 8? Also can you book the table by Friday noon?"
+    },
+    {
+      "label": "m7",
+      "app": "gmail",
+      "thread": "friday-dinner",
+      "sender": "You",
+      "sent_at": "2026-11-11T10:40:00+05:30",
+      "date_source": "absolute",
+      "body": "9:30 works. I'll book the table by Friday noon."
+    },
+    {
+      "label": "m1",
+      "app": "whatsapp_web",
+      "thread": "sam",
+      "sender": "Sam",
+      "sent_at": "2026-11-09T19:05:00+05:30",
+      "date_source": "separator",
+      "body": "Dinner this Friday at 8?"
+    },
+    {
+      "label": "m2",
+      "app": "whatsapp_web",
+      "thread": "sam",
+      "sender": "You",
+      "sent_at": "2026-11-09T19:07:00+05:30",
+      "date_source": "separator",
+      "body": "Yes, 8 works"
+    },
+    {
+      "label": "m3",
+      "app": "whatsapp_web",
+      "thread": "sam",
+      "sender": "Sam",
+      "sent_at": "2026-11-10T18:20:00+05:30",
+      "date_source": "separator",
+      "body": "Brunch on Saturday at 9:30 too?"
+    },
+    {
+      "label": "m4",
+      "app": "whatsapp_web",
+      "thread": "sam",
+      "sender": "You",
+      "sent_at": "2026-11-10T18:22:00+05:30",
+      "date_source": "separator",
+      "body": "Sure, see you then"
+    },
+    {
+      "label": "m5",
+      "app": "whatsapp_web",
+      "thread": "sam",
+      "sender": "You",
+      "sent_at": null,
+      "date_source": "unknown",
+      "body": "I'll call the landlord tomorrow about the flat"
+    },
+    {
+      "label": "m8",
+      "app": "gmail",
+      "thread": "investor-deck",
+      "sender": "Priya",
+      "sent_at": "2026-11-12T11:00:00+05:30",
+      "date_source": "absolute",
+      "body": "Can you send me the deck by Friday evening?"
+    },
+    {
+      "label": "m9",
+      "app": "gmail",
+      "thread": "investor-deck",
+      "sender": "You",
+      "sent_at": "2026-11-12T11:30:00+05:30",
+      "date_source": "absolute",
+      "body": "Yes, I'll send it by 6 PM on Friday."
+    },
+    {
+      "label": "m10",
+      "app": "gmail",
+      "thread": "investor-deck",
+      "sender": "You",
+      "sent_at": "2026-11-13T16:00:00+05:30",
+      "date_source": "absolute",
+      "body": "Here is the deck, attached."
+    }
+  ]
+}
