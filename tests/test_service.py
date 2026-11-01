@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 from fakes import FakeLLM, FakeMinimi, FakeMinimiFactory
-from helpers import LRM, T0, at, make_config, make_event
+from helpers import LRM, T0, at, make_config, make_event, minimi_page, minimi_result
 
 from person_context.config import Config
 from person_context.llm import LLMUnavailable
@@ -185,7 +185,7 @@ def test_freshness_failure_continues_with_stored_events(store: Store, cfg: Confi
 
 def test_freshness_adds_new_events_before_the_card(store: Store, cfg: Config) -> None:
     fresh = "Asha Rao: actually make it 14,000"
-    minimi = FakeMinimi({"Asha Rao": [f"---\n{fresh}\n---\nother"]})
+    minimi = FakeMinimi({"Asha Rao": [minimi_page(minimi_result(fresh))]})
     extraction = {
         "events": [
             {

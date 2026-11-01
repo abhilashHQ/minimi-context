@@ -22,8 +22,14 @@ def result_for(params: dict[str, object]) -> dict[str, object]:
     if MODE == "quota":
         return {"content": [{"type": "text", "text": "Daily quota exceeded. Try tomorrow."}]}
     echo = {"pid": os.getpid(), "tool": params.get("name"), "arguments": arguments}
-    result: dict[str, object] = {"content": [{"type": "text", "text": json.dumps(echo)}]}
-    if isinstance(arguments, dict) and arguments.get("cursor") is None:
+    # minimi's real format: only a content key, one markdown result per match.
+    text = (
+        "## Search Results (1)\n\n### Result 1\n- **Source:** fake\n"
+        "- **Captured:** 2026-10-02 11:20\n- **Memory:** echo\n- **Context:**\n\n"
+        f"```\n{json.dumps(echo)}\n```\n"
+    )
+    result: dict[str, object] = {"content": [{"type": "text", "text": text}]}
+    if MODE == "paged" and isinstance(arguments, dict) and arguments.get("cursor") is None:
         result["structuredContent"] = {"nextCursor": "page-2"}
     return result
 

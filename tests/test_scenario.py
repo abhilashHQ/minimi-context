@@ -8,7 +8,16 @@ from pathlib import Path
 from typing import Any
 
 from fakes import FakeLLM, FakeMinimi, FakeMinimiFactory
-from helpers import ENCRYPTION_NOTICE, LRM, T0, at, make_config, whatsapp_tree
+from helpers import (
+    ENCRYPTION_NOTICE,
+    LRM,
+    T0,
+    at,
+    make_config,
+    minimi_page,
+    minimi_result,
+    whatsapp_tree,
+)
 
 from person_context.identity import track
 from person_context.prompts import ASK_SYSTEM, CARD_SYSTEM, COMPILE_SYSTEM
@@ -21,24 +30,21 @@ CHANGE_QUOTE = "Bhavya: Change of plan, we need 55 chairs now. Same delivery dat
 INVOICE_QUOTE = "Bhavya: Send the invoice to accounts@example.com, not to me."
 UNRELATED = "Karan: the landlord is raising my rent, please keep this between us"
 
-MINIMI_PAGE = f"""Found 4 results for Bhavya
-
----
-### Mail, 2 Oct 2026, 11:20
-Thread: Chair order
-{ORDER_QUOTE}
-
----
-### Mail, 9 Oct 2026, 16:45
-Thread: Re: Chair order
-{CHANGE_QUOTE}
-{INVOICE_QUOTE}
-
----
-### WhatsApp, 9 Oct 2026
-Chat: Karan
-{UNRELATED}
-"""
+MINIMI_PAGE = minimi_page(
+    minimi_result(
+        f"Chair order\n{ORDER_QUOTE}",
+        captured="2026-10-02 11:20",
+        memory="An email about a chair order.",
+    ),
+    minimi_result(
+        f"Re: Chair order\n{CHANGE_QUOTE}\n{INVOICE_QUOTE}",
+        captured="2026-10-09 16:45",
+        memory="A reply changing the chair order.",
+    ),
+    minimi_result(
+        f"Karan\n{UNRELATED}", source="WhatsApp", captured="2026-10-09 18:00", memory="A chat."
+    ),
+)
 
 EXTRACTION = {
     "events": [

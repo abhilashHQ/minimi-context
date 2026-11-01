@@ -91,3 +91,29 @@ def whatsapp_tree(name: str, descriptions: list[str], *, composer: str = "") -> 
             AXNode(role="AXTextArea", identifier="ChatBar_ComposerTextView", value=composer),
         ),
     )
+
+
+FENCE = "```"
+
+
+def minimi_result(
+    context: str,
+    *,
+    source: str = "Mail",
+    captured: str = "2026-10-02 11:20",
+    memory: str = "A message on screen.",
+) -> str:
+    """The body of one search_memory result, in minimi's real markdown format."""
+    return (
+        f"- **Source:** {source}\n"
+        f"- **Captured:** {captured}\n"
+        f"- **Memory:** {memory}\n"
+        "- **Context:**\n\n"
+        f"{FENCE}\n{context}\n{FENCE}"
+    )
+
+
+def minimi_page(*results: str) -> str:
+    """A search_memory response: a preamble heading, then one `### Result n` per result."""
+    body = "\n\n".join(f"### Result {i}\n{result}" for i, result in enumerate(results, 1))
+    return f"## Search Results ({len(results)})\n\n{body}\n"

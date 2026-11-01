@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 from fakes import FakeLLM, FakeMinimi, FakeMinimiFactory
-from helpers import T0, at, make_config
+from helpers import T0, at, make_config, minimi_page, minimi_result
 
 from person_context.compile import (
     CompileLocked,
@@ -21,12 +21,13 @@ from person_context.models import Alias, normalize
 from person_context.prompts import COMPILE_SCHEMA
 from person_context.store import Store
 
-ASHA_BLOCK = (
-    "### Mail, 2026-09-28 14:02\nFrom: Asha Rao <asha@example.com>\n"
-    "Asha Rao: We'd like 40 units, delivered by Friday."
+ASHA_CONTEXT = (
+    "From: Asha Rao <asha@example.com>\nAsha Rao: We'd like 40 units, delivered by Friday."
 )
-KARAN_BLOCK = "### WhatsApp, Karan Mehta\nKaran Mehta: my salary review is next week, keep it quiet"
-PAGE = f"Found 2 results\n\n---\n{ASHA_BLOCK}\n---\n{KARAN_BLOCK}\n"
+KARAN_CONTEXT = "Karan Mehta: my salary review is next week, keep it quiet"
+ASHA_RESULT = minimi_result(ASHA_CONTEXT, captured="2026-09-28 14:02")
+KARAN_RESULT = minimi_result(KARAN_CONTEXT, source="WhatsApp", captured="2026-09-28 15:10")
+PAGE = minimi_page(ASHA_RESULT, KARAN_RESULT)
 
 
 def extraction(
@@ -80,7 +81,7 @@ def test_stores_grounded_events_and_advances_watermark(store: Store, cfg: Config
     llm = FakeLLM(extraction(GOOD))
     result = run(store, cfg, FakeMinimi({"Asha Rao": [PAGE]}), llm, hours=1)
     assert result.outcome == "stored" and result.events_added == 1
-    assert result.blocks_passed == 1 and result.blocks_dropped == 2
+    assert result.blocks_passed == 1 and result.blocks_dropped == 1
     [stored] = store.timeline(1, 300)
     assert stored.source_quote == GOOD["source_quote"]
     assert stored.occurred_at == at(0).replace(month=9, day=28, hour=14, minute=2)
@@ -124,7 +125,7 @@ def test_quote_from_a_gated_out_block_is_dropped(store: Store, cfg: Config) -> N
 
 def test_empty_results_leave_watermark_and_skip_llm(store: Store, cfg: Config) -> None:
     llm = FakeLLM()
-    for pages in ({}, {"Asha Rao": [f"---\n{KARAN_BLOCK}\n---\nnothing"]}):
+    for pages in ({}, {"Asha Rao": [minimi_page(KARAN_RESULT)]}):
         result = run(store, cfg, FakeMinimi(pages), llm)
         assert result.outcome == "nothing_new"
     assert llm.calls == []
@@ -172,7 +173,7 @@ def test_paging_alias_dedupe_and_look_back_from_watermark(store: Store, cfg: Con
         at(-2.5),
     )
     store.set_alias_status(1, "Acme", "rejected")
-    minimi = FakeMinimi({"Asha Rao": ["p1", "p2", "p3", "p4"]})
+    minimi = FakeMinimi({"Asha Rao": [minimi_page(minimi_result(f"page {i}")) for i in range(4)]})
     run(store, cfg, minimi, FakeLLM())
     assert [(s["query"], s["cursor"]) for s in minimi.searches] == [
         ("Asha Rao", None),
@@ -204,7 +205,9 @@ def test_alias_proposals_need_grounded_evidence(store: Store, cfg: Config) -> No
 def test_proposed_alias_extends_search_and_rejected_alias_stops_gate(
     store: Store, cfg: Config
 ) -> None:
-    email_only = "---\nFrom: asha@example.com\nShipping address changed to Pune\n---\nfooter"
+    email_only = minimi_page(
+        minimi_result("From: asha@example.com\nShipping address changed to Pune")
+    )
     proposals = [
         {"value": "asha@example.com", "kind": "email", "evidence_quote": "<asha@example.com>"}
     ]
@@ -232,7 +235,9 @@ def test_proposed_alias_extends_search_and_rejected_alias_stops_gate(
     again = [
         {"value": "ASHA@example.com", "kind": "email", "evidence_quote": "From: asha@example.com"}
     ]
-    minimi = FakeMinimi({"Asha Rao": ["---\nAsha Rao\nFrom: asha@example.com\n---\nx"]})
+    minimi = FakeMinimi(
+        {"Asha Rao": [minimi_page(minimi_result("Asha Rao\nFrom: asha@example.com"))]}
+    )
     result = run(store, cfg, minimi, FakeLLM(extraction(proposals=again)), hours=4)
     assert result.proposals_added == 0
     assert {a.value: a.status for a in store.aliases(1)}["asha@example.com"] == "rejected"
@@ -274,3 +279,30 @@ def test_normalized_quotes_match_blocks(store: Store, cfg: Config) -> None:
     result = run(store, cfg, FakeMinimi({"Asha Rao": [PAGE]}), FakeLLM(extraction(event(quote))))
     assert result.events_added == 1
     assert normalize(store.timeline(1, 1)[0].source_quote) == normalize(GOOD["source_quote"])
+
+
+def test_other_persons_result_never_reaches_llm_and_blocks_keep_metadata(
+    store: Store, cfg: Config
+) -> None:
+    page = minimi_page(
+        KARAN_RESULT,
+        minimi_result(
+            "# Notes\n## Asha Rao\n---\nAsha Rao: call me Monday", captured="2026-09-29 10:00"
+        ),
+        minimi_result("Priya Nair: rent is due", source="Messages"),
+    )
+    llm = FakeLLM(extraction())
+    result = run(store, cfg, FakeMinimi({"Asha Rao": [page]}), llm)
+    assert result.blocks_passed == 1 and result.blocks_dropped == 2
+    prompt = llm.prompts()
+    assert "Karan" not in prompt and "salary" not in prompt and "Priya" not in prompt
+    assert "- **Source:** Mail" in prompt and "- **Captured:** 2026-09-29 10:00" in prompt
+    assert "## Asha Rao" in prompt and "Asha Rao: call me Monday" in prompt
+
+
+def test_unknown_format_yields_nothing_and_no_llm_call(store: Store, cfg: Config) -> None:
+    unknown = f"Found 2 results\n\n---\n{ASHA_CONTEXT}\n---\n{KARAN_CONTEXT}\n"
+    llm = FakeLLM()
+    result = run(store, cfg, FakeMinimi({"Asha Rao": [unknown]}), llm)
+    assert result.outcome == "nothing_new" and llm.calls == []
+    assert store.watermark(1) is None

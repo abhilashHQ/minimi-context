@@ -23,8 +23,8 @@ log = logging.getLogger(__name__)
 PROTOCOL_VERSION = "2025-06-18"
 BUDGET_WINDOW = timedelta(days=7)
 
-_RULE = re.compile(r"^ {0,3}(?:-{3,}|\*{3,}|_{3,})[ \t]*$", re.MULTILINE)
-_HEADING = re.compile(r"^(#{1,6})[ \t]", re.MULTILINE)
+_RESULT_HEADING = re.compile(r"^ {0,3}#{1,6}[ \t]+Result[ \t]+\d+[ \t]*#*[ \t]*$")
+_FENCE = re.compile(r"^ {0,3}```")
 _QUOTA = re.compile(
     r"\b(?:quota|limit)\s+(?:exceeded|reached|exhausted)\b|\brate[- ]limit|\btoo many requests\b",
     re.IGNORECASE,
@@ -66,23 +66,26 @@ def look_back(hours: int) -> dict[str, Any]:
 
 
 def split_results(text: str) -> list[str]:
-    """Split tool output on result boundaries without parsing any fields.
+    """Split search output into one block per result without parsing any fields.
 
-    Tries horizontal rules, then the shallowest heading level. If neither yields more
-    than one block, the whole response is one block.
+    A block starts at a `Result <number>` heading outside a ``` fence; the preamble
+    before the first one is dropped. If no boundary is found the format is unknown and
+    nothing is returned, so no unrecognised text can reach the privacy gate.
     """
-    for blocks in (_RULE.split(text), _split_on_headings(text)):
-        kept = [block.strip() for block in blocks if block.strip()]
-        if len(kept) > 1:
-            return kept
-    return [text.strip()] if text.strip() else []
-
-
-def _split_on_headings(text: str) -> list[str]:
-    levels = [len(match.group(1)) for match in _HEADING.finditer(text)]
-    if not levels:
-        return [text]
-    return re.split(rf"^(?=#{{{min(levels)}}}[ \t])", text, flags=re.MULTILINE)
+    blocks: list[list[str]] = []
+    in_fence = False
+    for line in text.splitlines():
+        if _FENCE.match(line):
+            in_fence = not in_fence
+        elif not in_fence and _RESULT_HEADING.match(line):
+            blocks.append([])
+        if blocks:
+            blocks[-1].append(line)
+    if not blocks:
+        if text.strip():
+            log.warning("mcp output has no result boundaries chars=%d", len(text))
+        return []
+    return ["\n".join(lines).strip() for lines in blocks]
 
 
 class CallBudget:

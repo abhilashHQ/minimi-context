@@ -5,15 +5,17 @@ import os
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 import pytest
-from helpers import T0, at
+from helpers import T0, at, minimi_page, minimi_result
 
 from person_context.minimi import (
     BudgetExceeded,
     CallBudget,
     MinimiError,
     StdioMinimiClient,
+    ToolResult,
     look_back,
     split_results,
 )
@@ -34,6 +36,12 @@ def client(store: Store, mode: str, *, limit: int = 0, timeout: float = 5.0) -> 
     )
 
 
+def echo(result: ToolResult) -> Any:
+    """The JSON the fake server echoes inside its single result's context fence."""
+    [block] = split_results(result.text)
+    return json.loads(block.split("```")[1])
+
+
 def gone(pid: int) -> bool:
     try:
         os.kill(pid, 0)
@@ -47,7 +55,7 @@ def test_success_one_process_per_batch(store: Store) -> None:
         first = minimi.search_memory("Asha Rao", look_back(24))
         second = minimi.get_latest_context(hours=2, limit=5)
         third = minimi.list_active_threads("24h")
-    echoes = [json.loads(r.text) for r in (first, second, third)]
+    echoes = [echo(r) for r in (first, second, third)]
     assert len({e["pid"] for e in echoes}) == 1
     assert echoes[0]["arguments"] == {
         "query": "Asha Rao",
@@ -56,23 +64,25 @@ def test_success_one_process_per_batch(store: Store) -> None:
     }
     assert echoes[1]["arguments"] == {"hours": 2, "limit": 5}
     assert echoes[2]["arguments"] == {"window": "24h"}
-    assert first.next_cursor == "page-2"
+    assert first.next_cursor is None
     assert gone(echoes[0]["pid"])
     assert store.mcp_calls_since(T0) == 3
 
 
 def test_cursor_and_source_app_are_passed(store: Store) -> None:
-    with client(store, "ok") as minimi:
+    with client(store, "paged") as minimi:
+        first = minimi.search_memory("Asha", look_back(1))
         page = minimi.search_memory("Asha", look_back(1), source_app="Mail", cursor="page-2")
-    assert json.loads(page.text)["arguments"]["cursor"] == "page-2"
-    assert json.loads(page.text)["arguments"]["source_app"] == "Mail"
+    assert first.next_cursor == "page-2"
+    assert echo(page)["arguments"]["cursor"] == "page-2"
+    assert echo(page)["arguments"]["source_app"] == "Mail"
     assert page.next_cursor is None
 
 
 def test_noise_on_stdout_is_skipped(store: Store) -> None:
     with client(store, "noise") as minimi:
         result = minimi.search_memory("Asha", look_back(1))
-    assert json.loads(result.text)["arguments"]["query"] == "Asha"
+    assert echo(result)["arguments"]["query"] == "Asha"
 
 
 @pytest.mark.parametrize("mode", ["tool_error", "quota", "rpc_error"])
@@ -120,16 +130,28 @@ def test_budget_zero_is_unlimited(store: Store) -> None:
         minimi.search_memory("Asha", look_back(1))
 
 
-def test_split_on_rules() -> None:
-    text = "Found 2\n\n---\nAsha said hi\n---\nKaran said bye\n"
-    assert split_results(text) == ["Found 2", "Asha said hi", "Karan said bye"]
+def test_split_real_format_one_block_per_result() -> None:
+    page = minimi_page(
+        minimi_result("Karan Mehta: lunch?", source="WhatsApp"),
+        minimi_result("Asha Rao: send the deck", captured="2026-10-03 09:00"),
+    )
+    blocks = split_results(page)
+    assert len(blocks) == 2
+    assert blocks[0].startswith("### Result 1") and "Karan" in blocks[0]
+    assert "Asha" not in blocks[0] and "Search Results" not in blocks[0]
+    assert blocks[1].startswith("### Result 2")
+    assert "- **Source:** Mail" in blocks[1] and "- **Captured:** 2026-10-03 09:00" in blocks[1]
 
 
-def test_split_on_shallowest_heading() -> None:
-    text = "## One\nAsha\n### detail\nmore\n## Two\nKaran"
-    assert split_results(text) == ["## One\nAsha\n### detail\nmore", "## Two\nKaran"]
+def test_headings_and_rules_inside_a_fence_do_not_split() -> None:
+    context = "# Inbox\n## Result 7\n### Result 8\n---\nAsha Rao: notes\n***"
+    [block] = split_results(minimi_page(minimi_result(context)))
+    assert "## Result 7" in block and "### Result 8" in block and "Asha Rao: notes" in block
+    assert "- **Source:**" in block and "- **Captured:**" in block
 
 
-def test_split_failure_is_one_block() -> None:
-    assert split_results("  just one result about Asha  ") == ["just one result about Asha"]
+def test_unknown_format_yields_nothing(caplog: pytest.LogCaptureFixture) -> None:
+    text = "Found 2\n\n---\nAsha Rao said hi\n---\nKaran said bye\n## Two\nmore"
+    assert split_results(text) == []
+    assert "chars=" in caplog.text and "Asha" not in caplog.text
     assert split_results("   ") == []
