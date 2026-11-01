@@ -291,9 +291,7 @@ class Store:
 
     def record_mcp_call(self, tool: str, when: datetime) -> None:
         with self._tx() as conn:
-            conn.execute(
-                "INSERT INTO mcp_calls (called_at, tool) VALUES (?, ?)", (_ts(when), tool)
-            )
+            conn.execute("INSERT INTO mcp_calls (called_at, tool) VALUES (?, ?)", (_ts(when), tool))
 
     def mcp_calls_since(self, since: datetime) -> int:
         row = self._conn.execute(
