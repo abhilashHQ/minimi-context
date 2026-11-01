@@ -108,7 +108,7 @@ For each tracked person:
 1. Read the watermark. Default look-back on first run is 14 days.
 2. Call `search_memory` for each non-rejected alias, deduplicated. Pass results through the privacy gate.
 3. If nothing new passes, stop without calling the LLM and leave the watermark alone.
-4. Send the blocks with the `PC_MODEL_COMPILE` model. Extract events for this person with `text`, `source_quote`, `occurred_at`, `source_app`, `source_thread`, `speaker`, plus any alias proposals. Prompt rules: capture all context about the person, including facts, plans, numbers, preferences, people and changes. Do not filter for promises. `source_quote` is copied word for word. Never guess the speaker: use `unknown`.
+4. Send the blocks with the `PC_MODEL_COMPILE` model. Extract events for this person with `text`, `source_quote`, `occurred_at`, `source_app`, `source_thread`, `speaker`, plus any alias proposals. Prompt rules: capture all context about the person, including facts, plans, numbers, preferences, people and changes, and what the user said to them or about them. Records often show both sides of a conversation: return the user's own messages to the person as events with speaker `self`, and go through every message in an email thread. Do not filter for promises. `source_quote` is copied word for word. `source_app` is the app or site the message was in; for a browser, the site (such as Gmail), not "Web" or the browser's name. Never guess the speaker: use `unknown`.
 5. Drop any event whose `source_quote` is not found in the source blocks after `normalize`.
 6. Store events in one transaction, then advance the watermark to the start time of this run.
 
@@ -141,17 +141,17 @@ No open chat, or no header found, returns `None`. Build the test fixture from th
 
 **Freshness:** before building a card or an answer, fetch memories since the last compile through the same privacy gate and extract them as events. If `BudgetExceeded` or `MinimiError` occurs, continue with stored events and log it. minimi's connector is metered per week across all clients, so freshness for a person runs at most once every `REFRESH_MINUTES` (10, a constant in `service.py`). The last attempt is stored in `compile_state` under `refresh:<person_id>` and recorded whatever the outcome, so a quota failure is not repeated on every Ask. The scheduled compile and `person-context compile` are not throttled.
 
-**Card:** the question is what is on screen. The model `PC_MODEL_ANSWER` returns `{show, lines: [{text, event_ids, quote}]}`, at most 4 lines. Prompt rules: only what helps with this conversation right now, nothing already visible, no generic summary, newer facts over older ones with the change stated, and no advice. Grounding then runs:
+**Card:** the question is what is on screen. The model `PC_MODEL_ANSWER` returns `{show, lines: [{text, event_ids, quote}]}`, at most 4 lines. Prompt rules: only what helps with this conversation right now, nothing already visible, no generic summary, newer facts over older ones with the change stated, and no advice. Each `quote` is the shortest word-for-word fragment of the event's `source_quote` that supports the line, at most 12 words. Grounding then runs:
 1. Every line needs a known event ID, and its quote must appear in that event's `source_quote` after `normalize`.
 2. Drop a line if its quote appears in the on-screen messages.
 3. No lines left, or `show` false: no card, no error, and `last_card_at` is unchanged.
 
-**Ask:** the input is the user's question. It starts on the person on screen. Another person can be named, matched by alias; if ambiguous or unknown, it says so. It returns `{answer, citations: [{event_id, quote}]}`. Citations go through the same check. An answer with no surviving citations displays `I don't have that in this person's context.` Older facts that have since changed must be flagged in the answer. Ask does not save chat history.
+**Ask:** the input is the user's question. It starts on the person on screen. Another person can be named, matched by alias; if ambiguous or unknown, it says so. It returns `{answer, citations: [{event_id, quote}]}`, each quote the shortest supporting fragment of at most 12 words. Citations go through the same check. An answer with no surviving citations displays `I don't have that in this person's context.` Older facts that have since changed must be flagged in the answer. Ask does not save chat history.
 
 ## 14. UI
 - Non-activating `NSPanel` subclass, bottom-right of the main screen, floating, on all spaces. It must never take focus when the card appears. `canBecomeKeyWindow` returns true so the Ask field can receive typing only after a click or the hotkey.
 - Card: person name, lines each with quote, app and date, an Ask field, a dismiss button. No sound. Auto-hide after 45 seconds unless hovered or in use.
-- A pending alias shows one line with Confirm and Reject.
+- A pending alias shows its question on its own wrapping line, with Confirm and Reject in a row below it.
 - Hotkey: Cmd+Shift+J through a global `NSEvent` monitor. It toggles the Ask panel. A key panel in an inactive app still sends keystrokes to the active app, so the hotkey path activates the app before making the panel key, and hiding the panel after that hands focus back to the previous app. Clicking the Ask field works without activating, and the card never activates. While the app is active, polling pauses and keeps the last screen state.
 - Run as an accessory app with no Dock icon. Use system colors and fonts so light and dark mode both work. Show "Working" while Ask runs and an inline message on failure.
 
