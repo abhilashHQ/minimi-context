@@ -72,6 +72,7 @@ Event: id, person_id, occurred_at, source_app, source_thread, speaker(self|them|
 ```
 - `Event.id` is the sha256 of `person_id|source_app|normalized source_quote`. Inserts are idempotent.
 - Also store: `person_seen(person_id, last_seen_at, last_card_at)`, `compile_state(key, value)` for the watermark, `mcp_calls(called_at, tool)`.
+- `seen_block(person_id, hash, text, saved_at)`: `hash` is the sha256 of `normalize(block)` for every gated block already compiled. `text` is the raw block, kept only for the person's newest `BLOCK_CAP` (20) blocks; older rows have `text` NULL but keep their hash, so they still deduplicate. Raw text never goes in logs.
 - `normalize(text)`: Unicode NFKC, strip U+200E and U+200F, collapse whitespace, casefold. There is exactly one implementation, used everywhere.
 - Use WAL mode and versioned migrations. Each thread uses its own connection.
 
@@ -80,7 +81,8 @@ Event: id, person_id, occurred_at, source_app, source_thread, speaker(self|them|
 - Start one process per batch and terminate it after. Enforce a 30-second timeout per call. Handle a dead process and non-JSON stdout lines.
 - Methods: `search_memory(query, time_range, source_app=None, limit=20, cursor=None)`, `get_latest_context(hours, limit)`, `list_active_threads(window)`.
 - `time_range` for look-backs is `{"last": {"hours": n}}`. Use `cursor` for paging, at most 3 pages per query.
-- Tool output is markdown whose format can change. **Do not parse its fields.** Split on result boundaries only as far as needed for the alias gate; if splitting fails, treat the whole response as one block.
+- Tool output is markdown whose format can change. **Do not parse its fields.** Split on result boundaries only as far as needed for the alias gate. The real `search_memory` output is a `## Search Results (n)` preamble, then one `### Result <n>` heading per result with `Source`, `Captured`, `Memory` and `Context` lines; the context is raw screen text inside a ``` fence and can contain its own headings and rules. Do not track fences: a stray ``` line in captured text would flip the state and merge later results. Start a block only at a heading matching `Result <number>` whose next non-blank line starts with `- **Source:**`. Drop the preamble before the first boundary.
+- Fail closed: if no boundary is found, return no blocks and log a warning with the character count only. Never treat the whole response as one block.
 - Record every `tools/call` in `mcp_calls`. Before a call, if calls in the past 7 days have reached the budget, raise `BudgetExceeded`. Callers catch it and continue without new data.
 - A tool result with `isError`, or a quota message, raises `MinimiError`.
 
@@ -91,25 +93,25 @@ Event: id, person_id, occurred_at, source_app, source_thread, speaker(self|them|
 
 ## 8. Privacy gate
 This must run before any text reaches the LLM. Google may review content on the free tier, and the user's other chats must never be sent.
-- Only confirmed or proposed aliases of a tracked person can pass.
+- Only confirmed aliases of a tracked person can pass. A proposed alias does not open the gate until the user confirms it: a proposal of the user's own name or company would otherwise send everything mentioning it to the LLM.
 - A block passes only if it contains an alias on a word boundary after `normalize`.
 - Everything else is dropped and counted. Tests must prove that a block about someone else never reaches `LLMClient`.
 
 ## 9. Identity
 - `person-context track "<name>"` creates a person with a confirmed name alias.
 - Compile may propose new aliases through the LLM, such as an email address or company, only with an `evidence_quote` that passes grounding.
-- Proposed aliases extend the search but are shown for confirmation. Confirm or reject in one click on the panel, or with `person-context confirm`.
+- Proposed aliases are stored and shown for confirmation. They do not extend the search, pass the gate or match an Ask until confirmed. Confirm or reject in one click on the panel, or with `person-context confirm`.
 - A rejected alias is never proposed again and no longer passes the gate.
 - Never merge two people automatically.
 
 ## 10. Compile
 For each tracked person:
-1. Read the watermark. Default look-back on first run is 14 days.
-2. Call `search_memory` for each non-rejected alias, deduplicated. Pass results through the privacy gate.
-3. If nothing new passes, stop without calling the LLM and leave the watermark alone.
-4. Send the blocks with the `PC_MODEL_COMPILE` model. Extract events for this person with `text`, `source_quote`, `occurred_at`, `source_app`, `source_thread`, `speaker`, plus any alias proposals. Prompt rules: capture all context about the person, including facts, plans, numbers, preferences, people and changes. Do not filter for promises. `source_quote` is copied word for word. Never guess the speaker: use `unknown`.
+1. Read the watermark. Default look-back on first run is 14 days. Later look-backs are the whole hours since the watermark, rounded up, plus one hour of overlap, because minimi writes a memory a few minutes after its capture.
+2. Call `search_memory` for each confirmed alias, deduplicated. Pass results through the privacy gate.
+3. Drop gated blocks already in `seen_block`. If nothing new remains, stop without calling the LLM and leave the watermark alone.
+4. Send the blocks with the `PC_MODEL_COMPILE` model. Extract events for this person with `text`, `source_quote`, `occurred_at`, `source_app`, `source_thread`, `speaker`, plus any alias proposals. Prompt rules: capture all context about the person, including facts, plans, numbers, preferences, people and changes, and what the user said to them or about them. Records often show both sides of a conversation: return the user's own messages to the person as events with speaker `self`, and go through every message in an email thread. Do not filter for promises. `source_quote` is copied word for word. `source_app` is the app or site the message was in; for a browser, the site (such as Gmail), not "Web" or the browser's name. Never guess the speaker: use `unknown`.
 5. Drop any event whose `source_quote` is not found in the source blocks after `normalize`.
-6. Store events in one transaction, then advance the watermark to the start time of this run.
+6. Store events, the hash and text of each new gated block, and alias proposals in one transaction, then advance the watermark to the start time of this run.
 
 A failure leaves the watermark unchanged, so the next run retries. Running compile twice creates no duplicates. Runs do not overlap: guard with a lock. Triggers are the `PC_COMPILE_HOURS` timer and `person-context compile`.
 
@@ -136,22 +138,22 @@ No open chat, or no header found, returns `None`. Build the test fixture from th
 `app.py` polls once per second: check the frontmost app cheaply, and read the AX tree only when it is `net.whatsapp.WhatsApp`. Debounce a new chat for 1.5 seconds so the list has loaded.
 
 ## 13. Retrieval, card and Ask
-`Retriever.retrieve(person_id, question, screen=None) -> list[Event]`. `WholeTimelineRetriever` returns the person's events oldest first, capped at the newest 300. It must stay swappable with no changes elsewhere.
+`Retriever.retrieve(person_id, question, screen=None) -> list[Event]`. `WholeTimelineRetriever` returns the person's events oldest first, capped at the newest 300. It must stay swappable with no changes elsewhere. The whole timeline, plus Ask's capped raw blocks, is the demo retrieval; per-question retrieval scoped to the person is expected to replace it behind `Retriever` later.
 
-**Freshness:** before building a card or an answer, fetch memories since the last compile through the same privacy gate and extract them as events. If `BudgetExceeded` or `MinimiError` occurs, continue with stored events and log it.
+**Freshness:** before building a card or an answer, fetch memories since the last compile through the same privacy gate and extract them as events. If `BudgetExceeded` or `MinimiError` occurs, continue with stored events and log it. minimi's connector is metered per week across all clients, so freshness for a person runs at most once every `REFRESH_MINUTES` (10, a constant in `service.py`). The last attempt is stored in `compile_state` under `refresh:<person_id>` and recorded whatever the outcome, so a quota failure is not repeated on every Ask. The scheduled compile and `person-context compile` are not throttled.
 
-**Card:** the question is what is on screen. The model `PC_MODEL_ANSWER` returns `{show, lines: [{text, event_ids, quote}]}`, at most 4 lines. Prompt rules: only what helps with this conversation right now, nothing already visible, no generic summary, newer facts over older ones with the change stated, and no advice. Grounding then runs:
+**Card:** the question is what is on screen. The model `PC_MODEL_ANSWER` returns `{show, lines: [{text, event_ids, quote}]}`, at most 4 lines. Prompt rules: only what helps with this conversation right now, nothing already visible, no generic summary, newer facts over older ones with the change stated, and no advice. Each `quote` is the shortest word-for-word fragment of the event's `source_quote` that supports the line, at most 12 words. Grounding then runs:
 1. Every line needs a known event ID, and its quote must appear in that event's `source_quote` after `normalize`.
 2. Drop a line if its quote appears in the on-screen messages.
 3. No lines left, or `show` false: no card, no error, and `last_card_at` is unchanged.
 
-**Ask:** the input is the user's question. It starts on the person on screen. Another person can be named, matched by alias; if ambiguous or unknown, it says so. It returns `{answer, citations: [{event_id, quote}]}`. Citations go through the same check. An answer with no surviving citations displays `I don't have that in this person's context.` Older facts that have since changed must be flagged in the answer. Ask does not save chat history.
+**Ask:** the input is the user's question. It starts on the person on screen. Another person can be named, matched by alias; if ambiguous or unknown, it says so. Because extraction is lossy, Ask also reads the person's newest `BLOCK_CAP` raw blocks from `seen_block`, oldest first, as records with short references `r1`, `r2`, ...; the card uses events only. The model is called if there are events or records; with neither, Ask answers the miss message without a call. Records are raw screen captures: the prompt says to use only what concerns this person, and to prefer records for exact details when an event is vaguer. It returns `{answer, citations: [{event_id, quote, source_app}]}`, each quote the shortest supporting fragment of at most 12 words. A citation's `event_id` is an event reference or a record reference. An event citation goes through the same check and shows the event's own app and date. A record citation survives only if its reference is known and its quote is in that record's text after `normalize`; it shows the quote and the model's `source_app` with no date, since record fields are not parsed. An answer with no surviving citations displays `Nothing about this in what I have on {display_name}.` Older facts that have since changed must be flagged in the answer. Ask does not save chat history.
 
 ## 14. UI
 - Non-activating `NSPanel` subclass, bottom-right of the main screen, floating, on all spaces. It must never take focus when the card appears. `canBecomeKeyWindow` returns true so the Ask field can receive typing only after a click or the hotkey.
 - Card: person name, lines each with quote, app and date, an Ask field, a dismiss button. No sound. Auto-hide after 45 seconds unless hovered or in use.
-- A pending alias shows one line with Confirm and Reject.
-- Hotkey: Cmd+Shift+J through a global `NSEvent` monitor. It toggles the Ask panel.
+- A pending alias shows its question on its own wrapping line, with Confirm and Reject in a row below it.
+- Hotkey: Cmd+Shift+J through a global `NSEvent` monitor. It toggles the Ask panel. A key panel in an inactive app still sends keystrokes to the active app, so the hotkey path activates the app before making the panel key, and hiding the panel after that hands focus back to the previous app. Clicking the Ask field works without activating, and the card never activates. While the app is active, polling pauses and keeps the last screen state.
 - Run as an accessory app with no Dock icon. Use system colors and fonts so light and dark mode both work. Show "Working" while Ask runs and an inline message on failure.
 
 ## 15. Tests and done
