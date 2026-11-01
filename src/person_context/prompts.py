@@ -143,8 +143,8 @@ what it was before, and when it changed.
 - Cite every event or record the answer relies on. event_id is the event's event_id from the \
 events list, or the record's id, such as r1. quote is the shortest word-for-word fragment \
 that supports the answer, at most 12 words, copied from that event's source_quote or that \
-record's text. source_app is the app or site the quote came from; for a record, read it \
-from the record.
+record's text. source_app is one short app or site name, such as Gmail or WhatsApp, never \
+a thread title; for a browser, the site, not "Web".
 """
 
 
