@@ -245,6 +245,9 @@ class ContextPanel:
         field.setPlaceholderString_("Ask about this person")
         field.setTarget_(self._actions)
         field.setAction_("ask:")
+        # Only Return submits: ending an edit (hiding, the hotkey, clicking away) must
+        # never send a half-typed question.
+        field.cell().setSendsActionOnEndEditing_(False)
         field.setEnabled_(not self._busy)
         field.widthAnchor().constraintEqualToConstant_(WIDTH - 2 * PADDING).setActive_(True)
         self._field = field
