@@ -118,8 +118,9 @@ change, for example "Order changed from 40 to 55 units on 20 Oct".
 - This is general context around the person. Do not favour promises, commitments or \
 obligations over other context.
 - At most 4 lines, each one short sentence.
-- Each line lists the event_ids it relies on, taken from the events list, and a quote copied \
-word for word from the source_quote of one of those events.
+- Each line lists the event_ids it relies on, taken from the events list, and a quote: the \
+shortest word-for-word fragment that supports the line, at most 12 words, copied from the \
+source_quote of one of those events.
 - If nothing helps with this conversation, return show false and no lines.
 """
 
@@ -135,8 +136,9 @@ obligations over other context unless the question asks about them.
 - When an older fact has since changed, flag it in the answer: give the current version, \
 what it was before, and when it changed.
 - Keep the answer short and plain. No advice.
-- Cite every event the answer relies on: its event_id from the events list and a quote \
-copied word for word from that event's source_quote.
+- Cite every event the answer relies on: its event_id from the events list and a quote: the \
+shortest word-for-word fragment that supports the answer, at most 12 words, copied from that \
+event's source_quote.
 """
 
 
