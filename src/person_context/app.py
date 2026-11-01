@@ -16,6 +16,7 @@ from AppKit import (
     NSEventModifierFlagControl,
     NSEventModifierFlagOption,
     NSEventModifierFlagShift,
+    NSRunningApplication,
     NSTimer,
 )
 from PyObjCTools import AppHelper
@@ -77,6 +78,10 @@ class App:
     # Polling and the card
 
     def _poll(self, timer: Any) -> None:
+        # While the Ask panel holds focus WhatsApp is not frontmost; keep the last screen
+        # so Ask still knows the person on screen.
+        if NSRunningApplication.currentApplication().isActive():
+            return
         if self._screen_task is not None and not self._screen_task.done():
             return
         pid = ax_macos.frontmost_whatsapp_pid()

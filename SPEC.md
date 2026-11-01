@@ -152,7 +152,7 @@ No open chat, or no header found, returns `None`. Build the test fixture from th
 - Non-activating `NSPanel` subclass, bottom-right of the main screen, floating, on all spaces. It must never take focus when the card appears. `canBecomeKeyWindow` returns true so the Ask field can receive typing only after a click or the hotkey.
 - Card: person name, lines each with quote, app and date, an Ask field, a dismiss button. No sound. Auto-hide after 45 seconds unless hovered or in use.
 - A pending alias shows one line with Confirm and Reject.
-- Hotkey: Cmd+Shift+J through a global `NSEvent` monitor. It toggles the Ask panel.
+- Hotkey: Cmd+Shift+J through a global `NSEvent` monitor. It toggles the Ask panel. A key panel in an inactive app still sends keystrokes to the active app, so the hotkey path activates the app before making the panel key, and hiding the panel after that hands focus back to the previous app. Clicking the Ask field works without activating, and the card never activates. While the app is active, polling pauses and keeps the last screen state.
 - Run as an accessory app with no Dock icon. Use system colors and fonts so light and dark mode both work. Show "Working" while Ask runs and an inline message on failure.
 
 ## 15. Tests and done

@@ -6,6 +6,7 @@ from typing import Any, Callable
 
 import objc
 from AppKit import (
+    NSApplication,
     NSBackingStoreBuffered,
     NSButton,
     NSColor,
@@ -86,6 +87,8 @@ class ContextPanel:
         self._question = ""
         self._answer: list[str] = []
         self._busy = False
+        # True after the hotkey activated this app; hiding then hands focus back.
+        self._activated = False
         self._timer: Any = None
         self._field: Any = None
         self._actions = _Actions.alloc().init()
@@ -159,6 +162,10 @@ class ContextPanel:
             self._question = ""
             self._answer = []
             self._render()
+        # A key panel in an inactive app still sends keystrokes to the active app, so
+        # typing would go into WhatsApp. Only the hotkey path activates.
+        NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
+        self._activated = True
         self._panel.makeKeyAndOrderFront_(None)
         self._panel.makeFirstResponder_(self._field)
         self._arm_auto_hide()
@@ -176,6 +183,9 @@ class ContextPanel:
             self._timer.invalidate()
             self._timer = None
         self._panel.orderOut_(None)
+        if self._activated:
+            self._activated = False
+            NSApplication.sharedApplication().hide_(None)
 
     # Actions
 
