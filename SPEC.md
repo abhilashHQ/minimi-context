@@ -72,6 +72,7 @@ Event: id, person_id, occurred_at, source_app, source_thread, speaker(self|them|
 ```
 - `Event.id` is the sha256 of `person_id|source_app|normalized source_quote`. Inserts are idempotent.
 - Also store: `person_seen(person_id, last_seen_at, last_card_at)`, `compile_state(key, value)` for the watermark, `mcp_calls(called_at, tool)`.
+- `seen_block(person_id, hash, text, saved_at)`: `hash` is the sha256 of `normalize(block)` for every gated block already compiled. `text` is the raw block, kept only for the person's newest `BLOCK_CAP` (20) blocks; older rows have `text` NULL but keep their hash, so they still deduplicate. Raw text never goes in logs.
 - `normalize(text)`: Unicode NFKC, strip U+200E and U+200F, collapse whitespace, casefold. There is exactly one implementation, used everywhere.
 - Use WAL mode and versioned migrations. Each thread uses its own connection.
 
@@ -105,12 +106,12 @@ This must run before any text reaches the LLM. Google may review content on the 
 
 ## 10. Compile
 For each tracked person:
-1. Read the watermark. Default look-back on first run is 14 days.
-2. Call `search_memory` for each non-rejected alias, deduplicated. Pass results through the privacy gate.
-3. If nothing new passes, stop without calling the LLM and leave the watermark alone.
+1. Read the watermark. Default look-back on first run is 14 days. Later look-backs are the whole hours since the watermark, rounded up, plus one hour of overlap, because minimi writes a memory a few minutes after its capture.
+2. Call `search_memory` for each confirmed alias, deduplicated. Pass results through the privacy gate.
+3. Drop gated blocks already in `seen_block`. If nothing new remains, stop without calling the LLM and leave the watermark alone.
 4. Send the blocks with the `PC_MODEL_COMPILE` model. Extract events for this person with `text`, `source_quote`, `occurred_at`, `source_app`, `source_thread`, `speaker`, plus any alias proposals. Prompt rules: capture all context about the person, including facts, plans, numbers, preferences, people and changes, and what the user said to them or about them. Records often show both sides of a conversation: return the user's own messages to the person as events with speaker `self`, and go through every message in an email thread. Do not filter for promises. `source_quote` is copied word for word. `source_app` is the app or site the message was in; for a browser, the site (such as Gmail), not "Web" or the browser's name. Never guess the speaker: use `unknown`.
 5. Drop any event whose `source_quote` is not found in the source blocks after `normalize`.
-6. Store events in one transaction, then advance the watermark to the start time of this run.
+6. Store events, the hash and text of each new gated block, and alias proposals in one transaction, then advance the watermark to the start time of this run.
 
 A failure leaves the watermark unchanged, so the next run retries. Running compile twice creates no duplicates. Runs do not overlap: guard with a lock. Triggers are the `PC_COMPILE_HOURS` timer and `person-context compile`.
 
@@ -137,7 +138,7 @@ No open chat, or no header found, returns `None`. Build the test fixture from th
 `app.py` polls once per second: check the frontmost app cheaply, and read the AX tree only when it is `net.whatsapp.WhatsApp`. Debounce a new chat for 1.5 seconds so the list has loaded.
 
 ## 13. Retrieval, card and Ask
-`Retriever.retrieve(person_id, question, screen=None) -> list[Event]`. `WholeTimelineRetriever` returns the person's events oldest first, capped at the newest 300. It must stay swappable with no changes elsewhere.
+`Retriever.retrieve(person_id, question, screen=None) -> list[Event]`. `WholeTimelineRetriever` returns the person's events oldest first, capped at the newest 300. It must stay swappable with no changes elsewhere. The whole timeline, plus Ask's capped raw blocks, is the demo retrieval; per-question retrieval scoped to the person is expected to replace it behind `Retriever` later.
 
 **Freshness:** before building a card or an answer, fetch memories since the last compile through the same privacy gate and extract them as events. If `BudgetExceeded` or `MinimiError` occurs, continue with stored events and log it. minimi's connector is metered per week across all clients, so freshness for a person runs at most once every `REFRESH_MINUTES` (10, a constant in `service.py`). The last attempt is stored in `compile_state` under `refresh:<person_id>` and recorded whatever the outcome, so a quota failure is not repeated on every Ask. The scheduled compile and `person-context compile` are not throttled.
 
@@ -146,7 +147,7 @@ No open chat, or no header found, returns `None`. Build the test fixture from th
 2. Drop a line if its quote appears in the on-screen messages.
 3. No lines left, or `show` false: no card, no error, and `last_card_at` is unchanged.
 
-**Ask:** the input is the user's question. It starts on the person on screen. Another person can be named, matched by alias; if ambiguous or unknown, it says so. It returns `{answer, citations: [{event_id, quote}]}`, each quote the shortest supporting fragment of at most 12 words. Citations go through the same check. An answer with no surviving citations displays `I don't have that in this person's context.` Older facts that have since changed must be flagged in the answer. Ask does not save chat history.
+**Ask:** the input is the user's question. It starts on the person on screen. Another person can be named, matched by alias; if ambiguous or unknown, it says so. Because extraction is lossy, Ask also reads the person's newest `BLOCK_CAP` raw blocks from `seen_block`, oldest first, as records with short references `r1`, `r2`, ...; the card uses events only. The model is called if there are events or records; with neither, Ask answers the miss message without a call. Records are raw screen captures: the prompt says to use only what concerns this person, and to prefer records for exact details when an event is vaguer. It returns `{answer, citations: [{event_id, quote, source_app}]}`, each quote the shortest supporting fragment of at most 12 words. A citation's `event_id` is an event reference or a record reference. An event citation goes through the same check and shows the event's own app and date. A record citation survives only if its reference is known and its quote is in that record's text after `normalize`; it shows the quote and the model's `source_app` with no date, since record fields are not parsed. An answer with no surviving citations displays `Nothing about this in what I have on {display_name}.` Older facts that have since changed must be flagged in the answer. Ask does not save chat history.
 
 ## 14. UI
 - Non-activating `NSPanel` subclass, bottom-right of the main screen, floating, on all spaces. It must never take focus when the card appears. `canBecomeKeyWindow` returns true so the Ask field can receive typing only after a click or the hotkey.
