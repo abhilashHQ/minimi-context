@@ -172,7 +172,9 @@ def test_paging_alias_dedupe_and_look_back_from_watermark(store: Store, cfg: Con
         ],
         at(-2.5),
     )
+    store.set_alias_status(1, "asha@example.com", "confirmed")
     store.set_alias_status(1, "Acme", "rejected")
+    store.save_compile(1, [], [Alias(1, "Asha R.", "name", "proposed", "Asha R.")], at(-2.5))
     minimi = FakeMinimi({"Asha Rao": [minimi_page(minimi_result(f"page {i}")) for i in range(4)]})
     run(store, cfg, minimi, FakeLLM())
     assert [(s["query"], s["cursor"]) for s in minimi.searches] == [
@@ -202,33 +204,44 @@ def test_alias_proposals_need_grounded_evidence(store: Store, cfg: Config) -> No
     assert statuses == {"Asha Rao": "confirmed", "asha@example.com": "proposed"}
 
 
-def test_proposed_alias_extends_search_and_rejected_alias_stops_gate(
+EMAIL_ONLY = minimi_page(minimi_result("From: asha@example.com\nShipping address changed to Pune"))
+EMAIL_PROPOSAL = {
+    "value": "asha@example.com",
+    "kind": "email",
+    "evidence_quote": "<asha@example.com>",
+}
+
+
+def propose_email(store: Store, cfg: Config) -> None:
+    llm = FakeLLM(extraction(GOOD, proposals=[EMAIL_PROPOSAL]))
+    run(store, cfg, FakeMinimi({"Asha Rao": [PAGE]}), llm, hours=1)
+    assert {a.value: a.status for a in store.aliases(1)}["asha@example.com"] == "proposed"
+
+
+def test_pending_alias_neither_searches_nor_opens_gate_until_confirmed(
     store: Store, cfg: Config
 ) -> None:
-    email_only = minimi_page(
-        minimi_result("From: asha@example.com\nShipping address changed to Pune")
-    )
-    proposals = [
-        {"value": "asha@example.com", "kind": "email", "evidence_quote": "<asha@example.com>"}
-    ]
-    run(
-        store,
-        cfg,
-        FakeMinimi({"Asha Rao": [PAGE]}),
-        FakeLLM(extraction(GOOD, proposals=proposals)),
-        hours=1,
-    )
+    propose_email(store, cfg)
+    pages = {"Asha Rao": [EMAIL_ONLY], "asha@example.com": [EMAIL_ONLY]}
 
-    minimi = FakeMinimi({"asha@example.com": [email_only]})
-    llm = FakeLLM(extraction())
-    run(store, cfg, minimi, llm, hours=2)
+    minimi, llm = FakeMinimi(pages), FakeLLM()
+    result = run(store, cfg, minimi, llm, hours=2)
+    assert [s["query"] for s in minimi.searches] == ["Asha Rao"]
+    assert result.outcome == "nothing_new" and llm.calls == []
+
+    assert store.set_alias_status(1, "asha@example.com", "confirmed")
+    minimi, llm = FakeMinimi(pages), FakeLLM(extraction())
+    run(store, cfg, minimi, llm, hours=3)
     assert [s["query"] for s in minimi.searches] == ["Asha Rao", "asha@example.com"]
     assert "Shipping address changed to Pune" in llm.prompts()
 
+
+def test_rejected_alias_stays_closed_and_is_not_proposed_again(store: Store, cfg: Config) -> None:
+    propose_email(store, cfg)
     assert store.set_alias_status(1, "asha@example.com", "rejected")
-    minimi.searches.clear()
-    llm = FakeLLM()
-    result = run(store, cfg, minimi, llm, hours=3)
+
+    minimi, llm = FakeMinimi({"Asha Rao": [EMAIL_ONLY]}), FakeLLM()
+    result = run(store, cfg, minimi, llm, hours=2)
     assert [s["query"] for s in minimi.searches] == ["Asha Rao"]
     assert result.outcome == "nothing_new" and llm.calls == []
 
@@ -238,7 +251,7 @@ def test_proposed_alias_extends_search_and_rejected_alias_stops_gate(
     minimi = FakeMinimi(
         {"Asha Rao": [minimi_page(minimi_result("Asha Rao\nFrom: asha@example.com"))]}
     )
-    result = run(store, cfg, minimi, FakeLLM(extraction(proposals=again)), hours=4)
+    result = run(store, cfg, minimi, FakeLLM(extraction(proposals=again)), hours=3)
     assert result.proposals_added == 0
     assert {a.value: a.status for a in store.aliases(1)}["asha@example.com"] == "rejected"
 

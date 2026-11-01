@@ -326,3 +326,12 @@ def test_ask_does_not_store_anything(store: Store, cfg: Config) -> None:
     service.ask("what budget?", SCREEN)
     assert store.event_count(1) == 1
     assert store.seen(1) == (None, None)
+
+
+def test_ask_matches_confirmed_aliases_only(store: Store, cfg: Config) -> None:
+    store.create_person("Karan Mehta", T0)
+    store.save_compile(2, [], [Alias(2, "Northwind", "company", "proposed", "Northwind")], at(-1))
+    service, _, _ = make_service(cfg, FakeLLM())
+    assert service.ask("what about Northwind?", None).status == "unknown_person"
+    assert service.resolve_alias(2, "Northwind", confirm=True)
+    assert service.ask("what about Northwind?", None).status == "no_context"

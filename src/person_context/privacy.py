@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 from .models import Alias, normalize
 
-GATE_STATUSES = frozenset({"confirmed", "proposed"})
+GATE_STATUSES = frozenset({"confirmed"})
 
 
 @dataclass(frozen=True)
@@ -22,7 +22,7 @@ def _pattern(value: str) -> re.Pattern[str]:
 
 
 def gate_patterns(aliases: Iterable[Alias]) -> list[re.Pattern[str]]:
-    """Patterns for the aliases that may pass the gate: confirmed or proposed, non-empty."""
+    """Patterns for the aliases that may pass the gate: confirmed and non-empty."""
     return [
         _pattern(alias.value)
         for alias in aliases

@@ -127,7 +127,7 @@ def _compile(
 ) -> CompileResult:
     since = store.watermark(person.id) or run_started - FIRST_RUN_LOOK_BACK
     hours = max(1, math.ceil((run_started - since).total_seconds() / 3600))
-    aliases = [alias for alias in store.aliases(person.id) if alias.status != "rejected"]
+    aliases = [alias for alias in store.aliases(person.id) if alias.status == "confirmed"]
 
     blocks = _search(minimi, aliases, hours)
     gated = gate(blocks, aliases)

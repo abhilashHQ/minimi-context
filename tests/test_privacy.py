@@ -24,10 +24,13 @@ def test_word_boundary_after_normalize() -> None:
     assert not gate(["Banana bread", "Anand called"], aliases).passed
 
 
-def test_email_and_proposed_aliases_pass() -> None:
-    aliases = [alias("asha@example.com", "proposed", "email")]
-    assert gate(["From: Asha@Example.com"], aliases).passed
-    assert not gate(["From: masha@example.com.au"], aliases).passed
+def test_confirmed_email_passes_and_proposed_alias_does_not() -> None:
+    assert gate(["From: Asha@Example.com"], [alias("asha@example.com", kind="email")]).passed
+    assert not gate(
+        ["From: masha@example.com.au"], [alias("asha@example.com", kind="email")]
+    ).passed
+    proposed = [alias("asha@example.com", "proposed", "email")]
+    assert gate(["From: asha@example.com"], proposed).passed == ()
 
 
 def test_rejected_and_empty_aliases_never_pass() -> None:

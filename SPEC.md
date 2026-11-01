@@ -92,14 +92,14 @@ Event: id, person_id, occurred_at, source_app, source_thread, speaker(self|them|
 
 ## 8. Privacy gate
 This must run before any text reaches the LLM. Google may review content on the free tier, and the user's other chats must never be sent.
-- Only confirmed or proposed aliases of a tracked person can pass.
+- Only confirmed aliases of a tracked person can pass. A proposed alias does not open the gate until the user confirms it: a proposal of the user's own name or company would otherwise send everything mentioning it to the LLM.
 - A block passes only if it contains an alias on a word boundary after `normalize`.
 - Everything else is dropped and counted. Tests must prove that a block about someone else never reaches `LLMClient`.
 
 ## 9. Identity
 - `person-context track "<name>"` creates a person with a confirmed name alias.
 - Compile may propose new aliases through the LLM, such as an email address or company, only with an `evidence_quote` that passes grounding.
-- Proposed aliases extend the search but are shown for confirmation. Confirm or reject in one click on the panel, or with `person-context confirm`.
+- Proposed aliases are stored and shown for confirmation. They do not extend the search, pass the gate or match an Ask until confirmed. Confirm or reject in one click on the panel, or with `person-context confirm`.
 - A rejected alias is never proposed again and no longer passes the gate.
 - Never merge two people automatically.
 
