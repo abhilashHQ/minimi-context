@@ -87,6 +87,10 @@ def _watermark_key(person_id: int) -> str:
     return f"watermark:{person_id}"
 
 
+def _refresh_key(person_id: int) -> str:
+    return f"refresh:{person_id}"
+
+
 class Store:
     def __init__(self, conn: sqlite3.Connection) -> None:
         self._conn = conn
@@ -255,6 +259,20 @@ class Store:
             "SELECT hash FROM seen_block WHERE person_id = ?", (person_id,)
         ).fetchall()
         return {str(row["hash"]) for row in rows}
+
+    def last_refresh(self, person_id: int) -> datetime | None:
+        row = self._conn.execute(
+            "SELECT value FROM compile_state WHERE key = ?", (_refresh_key(person_id),)
+        ).fetchone()
+        return None if row is None else _dt(row["value"])
+
+    def set_last_refresh(self, person_id: int, when: datetime) -> None:
+        with self._tx() as conn:
+            conn.execute(
+                "INSERT INTO compile_state (key, value) VALUES (?, ?)"
+                " ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                (_refresh_key(person_id), _ts(when)),
+            )
 
     def watermark(self, person_id: int) -> datetime | None:
         row = self._conn.execute(

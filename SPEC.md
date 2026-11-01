@@ -139,7 +139,7 @@ No open chat, or no header found, returns `None`. Build the test fixture from th
 ## 13. Retrieval, card and Ask
 `Retriever.retrieve(person_id, question, screen=None) -> list[Event]`. `WholeTimelineRetriever` returns the person's events oldest first, capped at the newest 300. It must stay swappable with no changes elsewhere.
 
-**Freshness:** before building a card or an answer, fetch memories since the last compile through the same privacy gate and extract them as events. If `BudgetExceeded` or `MinimiError` occurs, continue with stored events and log it.
+**Freshness:** before building a card or an answer, fetch memories since the last compile through the same privacy gate and extract them as events. If `BudgetExceeded` or `MinimiError` occurs, continue with stored events and log it. minimi's connector is metered per week across all clients, so freshness for a person runs at most once every `REFRESH_MINUTES` (10, a constant in `service.py`). The last attempt is stored in `compile_state` under `refresh:<person_id>` and recorded whatever the outcome, so a quota failure is not repeated on every Ask. The scheduled compile and `person-context compile` are not throttled.
 
 **Card:** the question is what is on screen. The model `PC_MODEL_ANSWER` returns `{show, lines: [{text, event_ids, quote}]}`, at most 4 lines. Prompt rules: only what helps with this conversation right now, nothing already visible, no generic summary, newer facts over older ones with the change stated, and no advice. Grounding then runs:
 1. Every line needs a known event ID, and its quote must appear in that event's `source_quote` after `normalize`.

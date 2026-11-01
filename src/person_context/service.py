@@ -6,7 +6,7 @@ import logging
 import threading
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Callable
 
 from .compile import CompileLocked, CompileResult, OpenMinimi, compile_all, refresh_person
@@ -42,6 +42,9 @@ from .trigger import HeaderMatch, header_confirmed, should_retrieve
 log = logging.getLogger(__name__)
 
 CARD_MAX_LINES = 4
+# minimi's connector is metered per week across all clients, so a card or Ask fetches
+# fresh memories for a person at most this often.
+REFRESH_MINUTES = 10
 NO_CONTEXT = "I don't have that in this person's context."
 UNKNOWN_PERSON = "I don't know which person you mean. Name someone you track."
 ASK_FAILED = "Couldn't answer right now. Try again in a moment."
@@ -217,7 +220,16 @@ class Service:
         return resolve(self._store(), person_id, value, confirm=confirm)
 
     def _refresh(self, store: Store, person: Person, now: datetime) -> None:
-        """Freshness: compile this person since the last compile; failures keep stored events."""
+        """Freshness: compile this person since the last compile; failures keep stored events.
+
+        Throttled to one attempt per REFRESH_MINUTES. The attempt is recorded whatever its
+        outcome, so a quota failure is not repeated on every Ask.
+        """
+        last = store.last_refresh(person.id)
+        if last is not None and now - last < timedelta(minutes=REFRESH_MINUTES):
+            log.info("refresh skipped person=%d reason=throttled", person.id)
+            return
+        store.set_last_refresh(person.id, now)
         try:
             refresh_person(store, self._open_minimi, self._llm, self._cfg, person, now)
         except CompileLocked:

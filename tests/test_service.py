@@ -10,7 +10,7 @@ from helpers import LRM, T0, at, make_config, make_event, minimi_page, minimi_re
 
 from person_context.config import Config
 from person_context.llm import LLMUnavailable
-from person_context.minimi import BudgetExceeded
+from person_context.minimi import BudgetExceeded, MinimiError
 from person_context.models import Alias, Event
 from person_context.prompts import ASK_SCHEMA, CARD_SCHEMA, event_ref
 from person_context.screen import ScreenContext, ScreenMessage
@@ -335,3 +335,42 @@ def test_ask_matches_confirmed_aliases_only(store: Store, cfg: Config) -> None:
     assert service.ask("what about Northwind?", None).status == "unknown_person"
     assert service.resolve_alias(2, "Northwind", confirm=True)
     assert service.ask("what about Northwind?", None).status == "no_context"
+
+
+def test_refresh_is_throttled_across_asks(store: Store, cfg: Config) -> None:
+    reply = ask_reply("Approved.", (EVENT, "approved"))
+    minimi = FakeMinimi()
+    service, clock, factory = make_service(cfg, FakeLLM(reply, reply, reply), minimi)
+    service.ask("what budget?", SCREEN)
+    clock.now = at(9 / 60)
+    service.ask("and when?", SCREEN)
+    assert len(minimi.searches) == 1 and factory.batches == 1
+    clock.now = at(10 / 60)
+    service.ask("anything else?", SCREEN)
+    assert len(minimi.searches) == 2 and factory.batches == 2
+    assert store.last_refresh(1) == at(10 / 60)
+
+
+def test_failed_refresh_is_also_throttled(store: Store, cfg: Config) -> None:
+    reply = ask_reply("Approved.", (EVENT, "approved"))
+    minimi = FakeMinimi(error=MinimiError("You've used all 20 free minimi memory calls"))
+    service, clock, _ = make_service(cfg, FakeLLM(reply, reply, reply), minimi)
+    assert service.ask("what budget?", SCREEN).status == "answered"
+    clock.now = at(0.1)
+    assert service.ask("and when?", SCREEN).status == "answered"
+    assert len(minimi.searches) == 1
+    clock.now = at(0.2)
+    service.ask("anything else?", SCREEN)
+    assert len(minimi.searches) == 2
+
+
+def test_card_and_ask_share_the_throttle_but_compile_does_not(store: Store, cfg: Config) -> None:
+    llm = FakeLLM(card_reply(line()), ask_reply("Approved.", (EVENT, "approved")))
+    minimi = FakeMinimi()
+    service, _, _ = make_service(cfg, llm, minimi)
+    assert service.on_screen(SCREEN) is not None
+    service.ask("what budget?", SCREEN)
+    assert len(minimi.searches) == 1
+    service.compile()
+    service.compile()
+    assert len(minimi.searches) == 3
