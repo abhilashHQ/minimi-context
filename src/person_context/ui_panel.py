@@ -225,7 +225,12 @@ class ContextPanel:
                     )
                 )
             if self._card.pending_alias is not None:
-                self._add(self._alias_row(self._card.pending_alias))
+                alias = self._card.pending_alias
+                question = f"Is {alias.value} also {self._title}?"
+                self._add(
+                    _label(question, NSFont.systemFontOfSize_(11.0), NSColor.secondaryLabelColor())
+                )
+                self._add(self._alias_buttons())
         if self._question:
             self._add(
                 _label(
@@ -247,11 +252,9 @@ class ContextPanel:
         self._add(NSButton.buttonWithTitle_target_action_("Dismiss", self._actions, "dismiss:"))
         self._place()
 
-    def _alias_row(self, alias: Alias) -> Any:
-        text = f"Is {alias.value} also {self._title}?"
+    def _alias_buttons(self) -> Any:
         row = NSStackView.stackViewWithViews_(
             [
-                _label(text, NSFont.systemFontOfSize_(11.0), NSColor.secondaryLabelColor()),
                 NSButton.buttonWithTitle_target_action_("Confirm", self._actions, "confirmAlias:"),
                 NSButton.buttonWithTitle_target_action_("Reject", self._actions, "rejectAlias:"),
             ]
