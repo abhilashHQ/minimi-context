@@ -28,9 +28,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"configuration error: {exc}", file=sys.stderr)
         return 2
     if args.command == "run":
-        from . import app  # pyobjc is only importable on macOS
+        from .app import run  # pyobjc is only importable on macOS
 
-        return int(app.run(cfg))
+        return int(run(cfg))
     handlers = {
         "track": _track,
         "compile": _compile,
