@@ -14,7 +14,7 @@ from person_context.minimi import BudgetExceeded, MinimiError
 from person_context.models import Alias, Event
 from person_context.prompts import ASK_SCHEMA, CARD_SCHEMA, event_ref
 from person_context.screen import ScreenContext, ScreenMessage
-from person_context.service import NO_CONTEXT, UNKNOWN_PERSON, Service, describe_source
+from person_context.service import UNKNOWN_PERSON, Service, describe_source
 from person_context.store import Store
 
 QUOTE = "Asha Rao: the budget is approved at 12,000"
@@ -312,7 +312,8 @@ def test_ask_without_surviving_citations(store: Store, cfg: Config) -> None:
     ):
         service, _, _ = make_service(cfg, FakeLLM(reply))
         result = service.ask("what budget?", SCREEN)
-        assert result.status == "no_context" and result.answer == NO_CONTEXT
+        assert result.status == "no_context"
+        assert result.answer == "Nothing about this in what I have on Asha Rao."
         assert result.sources == ()
 
 
@@ -422,6 +423,7 @@ def test_fabricated_record_quote_is_dropped(store: Store, cfg: Config) -> None:
         service, _, _ = make_service(cfg, FakeLLM(reply))
         result = service.ask("what is the PO number?", SCREEN)
         assert result.status == "no_context" and result.sources == ()
+        assert result.answer == "Nothing about this in what I have on Asha Rao."
 
 
 def test_only_the_newest_blocks_are_sent_to_ask(store: Store, cfg: Config) -> None:

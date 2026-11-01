@@ -22,7 +22,7 @@ from helpers import (
 from person_context.identity import track
 from person_context.prompts import ASK_SYSTEM, CARD_SYSTEM, COMPILE_SYSTEM
 from person_context.screen import parse_screen
-from person_context.service import NO_CONTEXT, Service, describe_source
+from person_context.service import Service, describe_source
 from person_context.store import Store
 
 ORDER_QUOTE = "Bhavya: Please book 40 chairs for the Pune office, delivery by 14 Oct."
@@ -216,4 +216,6 @@ def test_customer_scenario(tmp_path: Path) -> None:
             "citations": [{"event_id": "0" * 12, "quote": "60 chairs", "source_app": ""}],
         }
     )
-    assert service.ask("How many chairs?", screen).answer == NO_CONTEXT
+    assert service.ask("How many chairs?", screen).answer == (
+        "Nothing about this in what I have on Bhavya."
+    )

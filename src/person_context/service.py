@@ -46,7 +46,7 @@ CARD_MAX_LINES = 4
 # minimi's connector is metered per week across all clients, so a card or Ask fetches
 # fresh memories for a person at most this often.
 REFRESH_MINUTES = 10
-NO_CONTEXT = "I don't have that in this person's context."
+NO_CONTEXT = "Nothing about this in what I have on {display_name}."
 UNKNOWN_PERSON = "I don't know which person you mean. Name someone you track."
 ASK_FAILED = "Couldn't answer right now. Try again in a moment."
 
@@ -193,7 +193,7 @@ class Service:
         events = self._retriever(store).retrieve(person.id, question, screen)
         records = record_refs(store.recent_blocks(person.id, BLOCK_CAP))
         if not events and not records:
-            return AskResult("no_context", NO_CONTEXT, person, ())
+            return _miss(person)
         raw = self._llm.generate_json(
             self._cfg.model_answer,
             ASK_SYSTEM,
@@ -205,7 +205,7 @@ class Service:
         ]
         citations = ground_citations(drafts, _refs(events), records)
         if not citations:
-            return AskResult("no_context", NO_CONTEXT, person, ())
+            return _miss(person)
         return AskResult("answered", raw["answer"], person, tuple(_source(c) for c in citations))
 
     # Compile and identity
@@ -301,6 +301,11 @@ def _ask_target(store: Store, question: str, screen: ScreenContext | None) -> Pe
     if match is not None and header_confirmed(match):
         return match.person
     return AskResult("unknown_person", UNKNOWN_PERSON, None, ())
+
+
+def _miss(person: Person) -> AskResult:
+    answer = NO_CONTEXT.format(display_name=person.display_name)
+    return AskResult("no_context", answer, person, ())
 
 
 def _refs(events: Sequence[Event]) -> dict[str, Event]:
