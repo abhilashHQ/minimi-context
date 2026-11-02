@@ -18,7 +18,9 @@ class LLMClient(Protocol):
 class GeminiClient:
     """Gemini over google-genai. Reads the key from GEMINI_API_KEY."""
 
-    def __init__(self, model: str = DEFAULT_MODEL, api_key: str | None = None) -> None:
+    def __init__(
+        self, model: str = DEFAULT_MODEL, api_key: str | None = None, temperature: float = 0
+    ) -> None:
         key = api_key or os.environ.get("GEMINI_API_KEY")
         if not key:
             raise RuntimeError("GEMINI_API_KEY is not set")
@@ -26,6 +28,7 @@ class GeminiClient:
 
         self._client = genai.Client(api_key=key)
         self.model = model
+        self.temperature = temperature
 
     def generate_json(self, prompt: str, schema: dict[str, Any]) -> Any:
         from google.genai import types
@@ -34,7 +37,7 @@ class GeminiClient:
             model=self.model,
             contents=prompt,
             config=types.GenerateContentConfig(
-                temperature=0,
+                temperature=self.temperature,
                 response_mime_type="application/json",
                 response_json_schema=schema,
             ),

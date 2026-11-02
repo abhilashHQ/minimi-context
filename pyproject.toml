@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "screen-memory-engine"
 version = "0.0.1"
-description = "Screen Memory Engine: P0 store and corpus, P1 search-only baseline"
+description = "Screen Memory Engine: P0 store and corpus, P1 search-only baseline, P1b scenario C gate"
 requires-python = ">=3.11"
 dependencies = [
     "mcp>=2.3,<3",
@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["sme*", "baseline*"]
+include = ["sme*", "baseline*", "corpus*", "runner*"]
 
 [tool.setuptools.package-data]
 "sme.store" = ["schema.sql"]
