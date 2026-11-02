@@ -21,7 +21,7 @@ ruff check .
 
 ### Build scenario A and B
 
-The build makes one Gemini call per conversation and embeds each memory with `all-MiniLM-L6-v2`. The first run downloads that model to the Hugging Face cache, and the server reuses it.
+The build asks Gemini for exactly one memory per message, sending each conversation in chunks of at most 40 messages with the 5 messages before each chunk as context, and embeds each memory with `all-MiniLM-L6-v2`. The first run downloads that model to the Hugging Face cache, and the server reuses it.
 
 ```powershell
 $env:GEMINI_API_KEY = "<your key>"
@@ -29,7 +29,7 @@ python -m baseline.build --scenario a --db runs\p1\a.db
 python -m baseline.build --scenario b --db runs\p1\b.db
 ```
 
-Add `--rebuild` to delete an existing database and build it again. Without it, the build refuses to append memories to a database that already has them.
+Add `--rebuild` to delete an existing database and build it again. Without it, the build resumes: chunks that finished before a crash are skipped. It refuses a database built from a different scenario, or one built before chunking existed.
 
 ### Claude Desktop config
 
@@ -88,3 +88,44 @@ Use the memory tools to answer. If memory has no answer, say you don't know.
 5. Judge each transcript by hand against the required elements in `corpus/expected.yaml`.
 
 `runs/` is git-ignored, so databases and transcripts stay local.
+
+## Scenario C on Windows
+
+Scenario C replaces the scenario A gate: about 1,300 messages over Nov 2 to 26, 2026, with 48 planted messages (`corpus/scenario_c/planted.json`) and generated noise. The questions are in `corpus/scenario_c_questions.yaml`. Run these in order from the repo root with the venv active. Reinstall once first, because this adds the `corpus` and `runner` packages:
+
+```powershell
+python -m pip install -e .
+$env:GEMINI_API_KEY = "<your key>"
+```
+
+1. Generate the noise. It makes about 180 Gemini calls, saves after each conversation day, and resumes if you run it again. It never discards existing noise unless you pass `--force`.
+
+```powershell
+python -m corpus.noise --out corpus\scenario_c\noise.json
+```
+
+2. Merge planted and noise into `corpus\scenario_c.json`.
+
+```powershell
+python -m corpus.scenario_c build
+```
+
+3. Check the merged corpus. It must print `OK`; any failure is printed with its label and the exit code is 1.
+
+```powershell
+python -m corpus.check corpus\scenario_c.json
+```
+
+4. Build the baseline database. It prints progress per chunk and resumes after a crash.
+
+```powershell
+python -m baseline.build --scenario c --db runs\p1c\c.db
+```
+
+5. Run the questions headless. This needs Claude Code on PATH and logged in. Each answer goes to `runs\p1b\baseline\<question>-<run>.json` with every tool call and its result; runs that already have a file are skipped unless you pass `--force`.
+
+```powershell
+python -m runner.run_questions --system baseline --db runs\p1c\c.db --now 2026-11-26T20:00:00+05:30 --questions corpus\scenario_c_questions.yaml --runs 3 --out runs\p1b\baseline
+```
+
+Once step 3 passes, commit `corpus\scenario_c\noise.json` and `corpus\scenario_c.json`. The noise is frozen after the first baseline run and is never regenerated. Judge each saved answer by hand against the required elements in `corpus/scenario_c_questions.yaml`.
