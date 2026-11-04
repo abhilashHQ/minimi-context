@@ -110,12 +110,13 @@ def test_get_latest_context_default_window(tools_a):
     ]
 
 
-def test_get_latest_context_wide_window_puts_unknown_last(tools_a):
-    out = call(build_server(tools_a), "get_latest_context", {"hours": 96})
+def test_get_latest_context_returns_only_messages_inside_window(tools_a):
+    out = call(build_server(tools_a), "get_latest_context", {"hours": 72})
     sam = next(t for t in out["threads"] if t["thread_title"] == "Sam")
-    assert [m["time"] for m in sam["messages"]][-1] is None
-    assert sam["messages"][-1]["text"] == "I'll call the landlord tomorrow about the flat"
-    assert sam["messages"][0]["text"] == "Dinner this Friday at 8?"
+    assert [m["text"] for m in sam["messages"]] == [
+        "Brunch on Saturday at 9:30 too?",
+        "Sure, see you then",
+    ]
 
 
 def test_scenario_b_tools(tmp_path, scenario_b):

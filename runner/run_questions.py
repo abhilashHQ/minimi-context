@@ -29,6 +29,9 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MODEL = "claude-opus-5-5"
+# The memory server loads its embedding model at startup, which can take longer
+# than Claude Code's default MCP startup timeout.
+MCP_STARTUP_TIMEOUT_MS = "120000"
 SERVER_NAME = "memory"
 SYSTEM_PROMPT = (
     "You answer questions about the user's life using only the memory tools. The as_of time"
@@ -38,6 +41,7 @@ SYSTEM_PROMPT = (
 # System under test -> MCP server module, started with --db and --now.
 SYSTEMS = {
     "baseline": "baseline.server",
+    "minimi_shape": "baseline.minimi_shape",
 }
 TIMEOUT_SECONDS = 900
 
@@ -64,12 +68,15 @@ def mcp_config(module: str, db: str | Path, now: str) -> dict[str, Any]:
                     now,
                 ],
                 "cwd": str(REPO_ROOT),
+                # The embedding model is cached by the build; checking the Hub on
+                # every start adds ~30 s and can hang past the startup timeout.
+                "env": {"HF_HUB_OFFLINE": "1"},
             }
         }
     }
 
 
-_CMD_JS = re.compile(r'"%~?dp0%?\\([^"]+?\.js)"', re.IGNORECASE)
+_CMD_TARGET = re.compile(r'"%~?dp0%?\\([^"]+?(\.js|\\claude\.exe))"', re.IGNORECASE)
 
 
 def claude_command(found: str | None, windows: bool | None = None) -> list[str]:
@@ -77,22 +84,29 @@ def claude_command(found: str | None, windows: bool | None = None) -> list[str]:
 
     On Windows an npm install puts a `claude.cmd` shim on PATH. Running a .cmd
     sends the arguments through cmd.exe, which mangles quotes and empty
-    strings, so the shim's node script is run with node directly instead.
+    strings, so the shim's target is run directly instead: the native
+    `claude.exe` when the shim points at one, otherwise its node script via node.
     """
     if not found:
         raise FileNotFoundError("claude is not on PATH; install Claude Code or pass --claude")
     windows = os.name == "nt" if windows is None else windows
     path = Path(found)
     if not (windows and path.suffix.lower() in (".cmd", ".bat")):
-        return [str(path)]
+        return [found]
 
     script = None
     try:
-        match = _CMD_JS.search(path.read_text(encoding="utf-8", errors="replace"))
+        match = _CMD_TARGET.search(path.read_text(encoding="utf-8", errors="replace"))
     except OSError:
         match = None
     if match:
-        script = path.parent / match.group(1).replace("\\", os.sep)
+        target = path.parent / match.group(1).replace("\\", os.sep)
+        if match.group(2).lower().endswith(".exe") and target.exists():
+            return [str(target)]
+        script = target
+    native = path.parent / "node_modules" / "@anthropic-ai" / "claude-code" / "bin" / "claude.exe"
+    if native.exists():
+        return [str(native)]
     default = path.parent / "node_modules" / "@anthropic-ai" / "claude-code" / "cli.js"
     if script is None or not script.exists():
         script = default if default.exists() else None
@@ -118,6 +132,8 @@ def claude_argv(prefix: list[str], question: str, config_path: str | Path) -> li
         "--strict-mcp-config",
         "--mcp-config",
         str(config_path),
+        "--allowedTools",
+        "mcp__memory",
         "--tools",
         "",
         "--setting-sources",
@@ -237,6 +253,7 @@ def run_one(
                 argv,
                 cwd=work_dir,
                 stdin=subprocess.DEVNULL,
+                env={**os.environ, "MCP_TIMEOUT": MCP_STARTUP_TIMEOUT_MS},
                 capture_output=True,
                 text=True,
                 encoding="utf-8",

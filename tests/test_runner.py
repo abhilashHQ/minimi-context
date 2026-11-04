@@ -117,6 +117,7 @@ def test_runs_every_question_and_saves_results(fake_claude, setup):
             "--model", "claude-opus-5-5",
             "--strict-mcp-config",
             "--mcp-config", c["argv"][6],
+            "--allowedTools", "mcp__memory",
             "--tools", "",
             "--setting-sources", "",
             "--system-prompt",
@@ -214,6 +215,7 @@ def test_unknown_system_and_missing_db(setup):
 def test_module_override_for_another_system():
     cfg = rq.mcp_config("sme.engine.server", "c.db", NOW)["mcpServers"]["memory"]
     assert cfg["args"][:4] == ["-W", "ignore", "-m", "sme.engine.server"]
+    assert cfg["env"] == {"HF_HUB_OFFLINE": "1"}
 
 
 NPM_SHIM = r"""@ECHO off
@@ -271,6 +273,22 @@ def test_windows_cmd_shim_fallback_checks_arguments(tmp_path, monkeypatch):
     assert argv[0] == str(shim) and argv[argv.index("--tools") + 1] == ""
     with pytest.raises(ValueError, match="cmd shim"):
         rq.claude_argv(prefix, 'Say "100%" & more', tmp_path / "mcp.json")
+
+
+NATIVE_SHIM = (
+    "@ECHO off\r\nSETLOCAL\r\nCALL :find_dp0\r\n"
+    + r'"%dp0%\node_modules\@anthropic-ai\claude-code\bin\claude.exe"   %*'
+    + "\r\n"
+)
+
+
+def test_windows_cmd_shim_to_native_exe_runs_exe_directly(tmp_path):
+    shim = tmp_path / "claude.cmd"
+    shim.write_text(NATIVE_SHIM, encoding="utf-8")
+    exe = tmp_path / "node_modules" / "@anthropic-ai" / "claude-code" / "bin" / "claude.exe"
+    exe.parent.mkdir(parents=True)
+    exe.write_bytes(b"")
+    assert rq.claude_command(str(shim), windows=True) == [str(exe)]
 
 
 def test_plain_executable(tmp_path):

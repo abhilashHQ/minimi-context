@@ -130,7 +130,15 @@ class BaselineTools:
                 latest = t["latest_message_time"]
                 if latest is None or not since <= repo.parse_time(latest) <= self.now:
                     continue
-                messages = sorted(repo.messages_in(conn, t["id"]), key=_chronological)
+                messages = sorted(
+                    (
+                        m
+                        for m in repo.messages_in(conn, t["id"])
+                        if m["sent_at"] is not None
+                        and since <= repo.parse_time(m["sent_at"]) <= self.now
+                    ),
+                    key=_chronological,
+                )
                 out.append(
                     {
                         "source_app": t["source_app"],
@@ -166,8 +174,8 @@ def build_server(tools: BaselineTools):
 
     @server.tool()
     def get_latest_context(hours: float = 48) -> dict[str, Any]:
-        """Return the full messages of every thread updated in the last `hours` hours
-        before as_of."""
+        """Return every message sent in the last `hours` hours before as_of, grouped by
+        thread. Messages with no known time are left out."""
         return tools.get_latest_context(hours)
 
     return server
