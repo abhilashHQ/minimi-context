@@ -71,8 +71,8 @@ and questions. Do not edit it to make a test pass.
 | # | Question | Required elements |
 |---|---|---|
 | C1 | What time is dinner with Sam tomorrow? | 9:30 PM; Friday November 27; says "same as last time" refers to the Nov 20 dinner, which Sam's Nov 18 email moved from 8 to 9:30; never says the dinner is at 8 |
-| C2 | What do I still owe people? | All 5 open commitments with their due dates; the Diwali photos marked overdue; none of the 4 closed commitments listed as owed |
-| C3 | Do I owe Priya anything? | Yes, the cap table by November 30, quoting c06; says the deck was already sent on WhatsApp on November 13; never says the deck is still owed |
+| C2 | What do I still owe people? | All 5 open commitments with their due dates: fill in the offsite form (by Fri Nov 27), Mom's train tickets for Dec 5 (book by Fri Nov 27), pay Rohan back 1,200 (by Sun Nov 29), send Priya the cap table (by Mon Nov 30), send Anu the Diwali photos (promised for the weekend of Nov 14-15); the Diwali photos marked overdue; none of these 4 closed commitments listed as still owed: the deck for Priya (sent Nov 13), the Q4 numbers for Dev (sent Nov 25), calling the landlord (done Nov 17), returning Meera's charger (returned Nov 18) |
+| C3 | Do I owe Priya anything? | Yes, the cap table by November 30, quoting c06; says you already sent the deck, on WhatsApp on November 13 (only saying Priya asked for it there is not enough); never says the deck is still owed |
 | C4 | Did I call the landlord? | Yes, on November 17; quotes c34 |
 | C5 | What did I agree to last week, Monday to Sunday? | Exactly these 7: landlord call (c37), dinner moved to 9:30 (c02), Meera's charger (c39), offsite form (c12), cap table (c06), Mom's train tickets (c46), paying Rohan back (c42); nothing outside Nov 16 to 22 |
 | C6 | Does Sam have any food restrictions? | Eats fish since November 19, quoting c22; was vegetarian before; never says Sam is currently vegetarian; never says Sam eats meat |
