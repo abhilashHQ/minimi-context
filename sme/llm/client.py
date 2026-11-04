@@ -98,7 +98,7 @@ class BedrockClient:
         self.model = model
         self._client = boto3.client(
             "bedrock-runtime", region_name=region,
-            config=Config(read_timeout=300, retries={"max_attempts": 6, "mode": "adaptive"}),
+            config=Config(read_timeout=300, retries={"max_attempts": 8, "mode": "standard"}),
         )
 
     def generate_json(self, prompt: str, schema: dict[str, Any]) -> Any:

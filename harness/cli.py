@@ -103,17 +103,29 @@ def cmd_add(args) -> None:
     app = args.app or store.db.execute(
         "SELECT app FROM sources WHERE thread_key = ? ORDER BY said_at DESC LIMIT 1", (args.thread,)
     ).fetchone()[0]
+    msgs = []
     for i, line in enumerate(args.msg):
         sender, _, body = line.partition(":")
         stamp = iso(at + timedelta(minutes=i))
         msg = {"label": f"live{int(time.time())}{i}", "app": app, "thread": args.thread,
-               "sender": sender.strip(), "sent_at": stamp, "seen_at": stamp, "body": body.strip()}
+               "sender": sender.strip(), "sent_at": stamp, "seen_at": stamp, "body": body.strip(),
+               "date_source": "absolute"}
+        msgs.append(msg)
         print(f"{msg['sender']}: {msg['body']} -> {eng.feed(msg, titles)}")
-    store.set_meta("now", stamp)
+    store.set_meta("now", max(store.get_meta("now") or stamp, stamp))
     if args.flush:
         eng.bursts.close_all(stamp)
         eng.drain()
     store.commit()
+    if args.baseline_db:
+        from baseline.add import add_messages
+        from baseline.embed import SentenceTransformerEmbedder
+        from sme.llm.client import BedrockClient
+
+        texts = add_messages(args.baseline_db, app, args.thread, titles.get(args.thread, args.thread),
+                             msgs, BedrockClient(), SentenceTransformerEmbedder())
+        for t in texts:
+            print(f"baseline memory: {t}")
 
 
 def cmd_ask(args) -> None:
@@ -165,6 +177,7 @@ def main(argv: list[str] | None = None) -> None:
     a.add_argument("--app")
     a.add_argument("--at", help="said_at of the first message (default: now + 1 minute)")
     a.add_argument("--no-flush", dest="flush", action="store_false")
+    a.add_argument("--baseline-db", help="also append the messages to this baseline database")
     a.add_argument("--model")
     a.set_defaults(fn=cmd_add)
 

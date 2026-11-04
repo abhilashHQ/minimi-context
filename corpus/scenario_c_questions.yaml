@@ -19,16 +19,16 @@ questions:
     scenario: c
     question: What do I still owe people?
     required:
-      - All 5 open commitments with their due dates
+      - "All 5 open commitments with their due dates: fill in the offsite form (by Fri Nov 27), Mom's train tickets for Dec 5 (book by Fri Nov 27), pay Rohan back 1,200 (by Sun Nov 29), send Priya the cap table (by Mon Nov 30), send Anu the Diwali photos (promised for the weekend of Nov 14-15)"
       - the Diwali photos marked overdue
-      - none of the 4 closed commitments listed as owed
+      - "none of these 4 closed commitments listed as still owed: the deck for Priya (sent Nov 13), the Q4 numbers for Dev (sent Nov 25), calling the landlord (done Nov 17), returning Meera's charger (returned Nov 18)"
 
   - id: C3
     scenario: c
     question: Do I owe Priya anything?
     required:
       - Yes, the cap table by November 30, quoting c06
-      - says the deck was already sent on WhatsApp on November 13
+      - says you already sent the deck, on WhatsApp on November 13 (only saying Priya asked for it there is not enough)
       - never says the deck is still owed
 
   - id: C4

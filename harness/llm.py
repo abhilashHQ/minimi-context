@@ -54,7 +54,7 @@ class LLM:
 
             self._client = boto3.client(
                 "bedrock-runtime", region_name=self.region,
-                config=Config(read_timeout=300, retries={"max_attempts": 6, "mode": "adaptive"}),
+                config=Config(read_timeout=300, retries={"max_attempts": 8, "mode": "standard"}),
             )
         return self._client
 
