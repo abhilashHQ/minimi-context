@@ -113,7 +113,8 @@ MEMORY_COLS = (
 FTS_WORD = re.compile(r"[A-Za-z0-9]+")
 FTS_STOP = set(
     "a an the to of and or for in on at by is are i you your me my we it this that be with"
-    " can will so do did does what when who how any".split()
+    " can will so do did does what when who how any have has had there their about get got"
+    " still just all some was were been am im i'm its it's whats what's anything".split()
 )
 
 

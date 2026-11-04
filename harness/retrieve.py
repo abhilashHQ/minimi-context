@@ -24,8 +24,10 @@ CHANGED_DAYS = 14
 CHANGED_MAX = 5
 RAW_MAX = 3
 MAX_LINES = 25
+MAX_RANKED_LINES = 8
 SCORE_FLOOR = 0.35
-RELATED_COSINE = 0.25
+RELATED_COSINE = 0.2
+KEYWORD_K = 10
 DEFAULT_TOKENS = 1500
 APP_LABEL = {"screen": None, "gmail": "gmail", "calendar": "calendar"}
 SCREEN_APP = {"whatsapp_web": "whatsapp", "gmail": "gmail"}
@@ -217,10 +219,27 @@ class Retriever:
             vecs.append(v)
         return picked
 
-    def filter_list(self, f, parsed: Parsed, pool) -> list[int]:
+    @staticmethod
+    def exhaustive(f: dict[str, Any], parsed: Parsed) -> bool:
+        """An owner or a time window makes a filter an enumeration ("what do I owe", "this
+        weekend"): every hit is shown and counted. Kind-only or people-only filters only rank."""
+        return bool(f.get("owner") or parsed.window)
+
+    def filter_list(self, f, parsed: Parsed, pool, qvec=None) -> list[int]:
         hits = [m for m in pool if self._match(m, f, parsed)]
-        hits.sort(key=lambda m: (m["event_at"] is None, m["event_at"] or "", m["id"]))
+        if qvec is not None and not self.exhaustive(f, parsed):
+            hits.sort(key=lambda m: -float(self.store.vector(m["id"]) @ qvec))
+        else:
+            hits.sort(key=lambda m: (m["event_at"] is None, m["event_at"] or "", m["id"]))
         return [m["id"] for m in hits]
+
+    @staticmethod
+    def _without_names(question: str, people: list[str]) -> str:
+        out = question
+        for p in people:
+            for tok in p.split():
+                out = re.sub(r"\b" + re.escape(tok) + r"('s)?\b", "", out, flags=re.I)
+        return " ".join(out.split())
 
     # R6 and R9 formatting
 
@@ -336,12 +355,21 @@ class Retriever:
             filters.append({"name": "about " + ", ".join(parsed.people)})
         if parsed.window and not filters:
             filters.append({"name": f"items {parsed.window_name}"})
-        filter_lists = [self.filter_list(f, parsed, pool) for f in filters]
+        filter_lists = [self.filter_list(f, parsed, pool, qvec) for f in filters]
         ranked = self.rank(question, qvec, pool, parsed, filter_lists)
-        must = {i for fl in filter_lists for i in fl}
-        keyword = set(self.store.bm25_memories(question, BM25_K, {m["id"] for m in pool}))
-        ranked = [(s, m) for s, m in ranked if m["id"] in must or (
-            s >= SCORE_FLOOR and (m["id"] in keyword or float(self.store.vector(m["id"]) @ qvec) >= RELATED_COSINE))]
+        must = {i for f, fl in zip(filters, filter_lists, strict=True) if self.exhaustive(f, parsed) for i in fl}
+        content = self._without_names(question, parsed.people)
+        cvec = self.embedder.one(content) if content != question else qvec
+        keyword = set(self.store.bm25_memories(content, KEYWORD_K, {m["id"] for m in pool}))
+        kept, extra = [], 0
+        for s, m in ranked:
+            if m["id"] in must:
+                kept.append((s, m))
+            elif extra < MAX_RANKED_LINES and s >= SCORE_FLOOR and (
+                    m["id"] in keyword or float(self.store.vector(m["id"]) @ cvec) >= RELATED_COSINE):
+                kept.append((s, m))
+                extra += 1
+        ranked = kept
 
         conflicts = self.conflicts(current)
         budget = max_tokens * 4
@@ -396,6 +424,8 @@ class Retriever:
         # R10
         footer = []
         for f, fl in zip(filters, filter_lists, strict=True):
+            if not self.exhaustive(f, parsed):
+                continue
             n_shown = sum(1 for i in fl if i in shown)
             footer.append(f"{f['name']}: {n_shown} of {len(fl)} shown")
             if n_shown < len(fl):

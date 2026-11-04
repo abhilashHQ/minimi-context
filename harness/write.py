@@ -8,6 +8,8 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Any
 
+from botocore.exceptions import BotoCoreError, ClientError
+
 from harness.llm import LLM, LLMError
 from harness.store import OPEN_KINDS, KINDS, Store
 from harness.text import (
@@ -46,9 +48,10 @@ Rules:
 - Keep exact identifiers (flight numbers, amounts, file names) in the memory text.
 - A request becomes a todo for you only when you agree to it. A proposal ("can we do 9:30?") is not an agreement until someone accepts it.
 - A todo is a commitment between people: someone asked and the other agreed, or someone promised another person something. Talking about what you're doing or about to do ("time to refill the printer", "nap time") is not a todo.
-- "Same as last time" and similar phrases: work out the real value from the candidates.
+- "Same as last time" and similar phrases: work out the real value from the candidates. "Last time" is the most recent earlier occurrence by its date (event_at), in its current version, not the usual or most frequent one.
 - The same thing often arrives again from another app (an email copy, a calendar entry). If a candidate already says it, use same, even when the candidate is ended.
-- Skip small talk unless it closes or changes something.
+- Most chat is small talk: skip it unless it closes or changes something. Opinions about movies, memes, sports or the news, jokes, reactions ("haha", "riveting drama"), and passing remarks are small talk. Write a fact or preference only if it would still matter to the user weeks later, like a diet, an allergy, a job, an address, a relationship, or an identifier.
+- Most chunks need no ops at all. An empty ops list is the right answer for pure chat.
 - Give the end state of the chunk: if something changed twice inside the chunk, report only the final version.
 - event_at is "YYYY-MM-DDTHH:MM" for a time, or "YYYY-MM-DD" for a due date without a time.
 
@@ -186,7 +189,7 @@ class Writer:
             self._finish(burst_id, "failed", str(exc))
             report["error"] = str(exc)
             return report
-        except Exception as exc:  # network or throttling after retries; the dream retries it
+        except (BotoCoreError, ClientError) as exc:  # network or throttling after retries; the dream retries it
             self.store.log(msgs[-1]["said_at"], "write", "failed", burst_id=burst_id, reason=repr(exc))
             self._finish(burst_id, "failed", repr(exc))
             report["error"] = repr(exc)

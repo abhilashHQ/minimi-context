@@ -58,8 +58,9 @@ class LLM:
             )
         return self._client
 
-    def _raw(self, system: str, user: str) -> str:
-        key = hashlib.sha256(f"{self.model}\0{system}\0{user}".encode()).hexdigest()
+    def _raw(self, system: str, user: str, effort: str = "medium") -> str:
+        tag = "" if effort == "medium" else f"\0{effort}"
+        key = hashlib.sha256(f"{self.model}\0{system}\0{user}{tag}".encode()).hexdigest()
         row = self.store.db.execute(
             "SELECT response FROM llm_cache WHERE prompt_hash = ?", (key,)
         ).fetchone()
@@ -73,7 +74,7 @@ class LLM:
             inferenceConfig={"maxTokens": 6000, "temperature": 0},
         )
         if "gpt-oss" in self.model:
-            kwargs["additionalModelRequestFields"] = {"reasoning_effort": "medium"}
+            kwargs["additionalModelRequestFields"] = {"reasoning_effort": effort}
         t0 = time.time()
         r = self.client.converse(**kwargs)
         self.stats.seconds += time.time() - t0
@@ -89,13 +90,13 @@ class LLM:
         )
         return text
 
-    def json(self, system: str, user: str) -> dict[str, Any]:
+    def json(self, system: str, user: str, effort: str = "medium") -> dict[str, Any]:
         """One call, and one retry asking for valid JSON when the first reply doesn't parse."""
         try:
-            return parse_json(self._raw(system, user))
+            return parse_json(self._raw(system, user, effort))
         except LLMError:
             try:
-                return parse_json(self._raw(system, user + "\n\nReply with one valid JSON object only."))
+                return parse_json(self._raw(system, user + "\n\nReply with one valid JSON object only.", effort))
             except LLMError as exc:
                 self.stats.errors.append(str(exc))
                 raise

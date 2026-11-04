@@ -10,6 +10,8 @@ from typing import Any
 
 import numpy as np
 
+from botocore.exceptions import BotoCoreError, ClientError
+
 from harness.llm import LLM, LLMError
 from harness.store import Store
 from harness.text import Embedder, overlap
@@ -114,8 +116,8 @@ class Dreamer:
 
     def _call(self, system: str, user: str) -> dict[str, Any] | None:
         try:
-            return self.llm.json(system, user)
-        except (LLMError, Exception) as exc:  # a failed dream step leaves the store as it was
+            return self.llm.json(system, user, effort="high")
+        except (LLMError, BotoCoreError, ClientError) as exc:  # a failed dream step leaves the store as it was
             self.store.log("dream", "dream", "failed", reason=repr(exc))
             return None
 
