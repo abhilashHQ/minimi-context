@@ -300,8 +300,8 @@ class Retriever:
         reason = m["end_reason"]
         srcs = self.store.memory_sources(m["id"])
         closer = next((s for s in reversed(srcs) if s["role"] == "ended"), None)
-        replacement = next((self.store.memory(l["from_id"]) for l in self.store.links_to(m["id"])
-                            if l["type"] == "replaces"), None)
+        replacement = next((self.store.memory(lk["from_id"]) for lk in self.store.links_to(m["id"])
+                            if lk["type"] == "replaces"), None)
         when = human_time(m["valid_to"], False)
         bits = [f"[m{m['id']}] {m['kind']}"]
         if m["event_at"]:
@@ -349,7 +349,7 @@ class Retriever:
         lines: list[str] = []
         shown: set[int] = set()
         used = len(header)
-        for s, m in ranked:
+        for _s, m in ranked:
             if len(lines) >= MAX_LINES:
                 break
             ln = self.line(m, conflicts)
@@ -370,7 +370,7 @@ class Retriever:
         changed_ranked = self.rank(question, qvec, changed_pool, parsed,
                                    [self.filter_list(f, parsed, changed_pool) for f in filters])
         changed: list[str] = []
-        for s, m in changed_ranked:
+        for _s, m in changed_ranked:
             if len(changed) >= CHANGED_MAX:
                 break
             relevant = (float(self.store.vector(m["id"]) @ qvec) > 0.35
@@ -378,7 +378,7 @@ class Retriever:
                         or any(m["id"] in fl for fl in [self.filter_list(f, parsed, [m]) for f in parsed.filters]))
             if not relevant:
                 continue
-            repl = [l["from_id"] for l in self.store.links_to(m["id"]) if l["type"] == "replaces"]
+            repl = [lk["from_id"] for lk in self.store.links_to(m["id"]) if lk["type"] == "replaces"]
             if repl and all(r in shown for r in repl) and not parsed.filters:
                 continue
             ln = self.changed_line(m)

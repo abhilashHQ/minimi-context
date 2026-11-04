@@ -45,6 +45,7 @@ Rules:
 - An event that simply happened is not ended. Only end an event that was cancelled or replaced.
 - Keep exact identifiers (flight numbers, amounts, file names) in the memory text.
 - A request becomes a todo for you only when you agree to it. A proposal ("can we do 9:30?") is not an agreement until someone accepts it.
+- A todo is a commitment between people: someone asked and the other agreed, or someone promised another person something. Talking about what you're doing or about to do ("time to refill the printer", "nap time") is not a todo.
 - "Same as last time" and similar phrases: work out the real value from the candidates.
 - The same thing often arrives again from another app (an email copy, a calendar entry). If a candidate already says it, use same, even when the candidate is ended.
 - Skip small talk unless it closes or changes something.
@@ -115,6 +116,10 @@ class Writer:
         current_ids = [m["id"] for m in everything if m["valid_to"] is None]
         allowed = set(current_ids)
         by_id = {m["id"]: m for m in everything}
+        if people:
+            about = [m["id"] for m in everything if m["valid_to"] is None and overlap(m["people"], people)]
+            for v in vecs:
+                add([by_id[i] for i, _ in self.store.vector_top(v, about, PER_MESSAGE)], PER_MESSAGE)
         for m, v in zip(msgs, vecs, strict=True):
             add([by_id[i] for i, _ in self.store.vector_top(v, current_ids, PER_MESSAGE)], PER_MESSAGE)
             add([by_id[i] for i in self.store.bm25_memories(m["text"], PER_MESSAGE, allowed)], PER_MESSAGE)
@@ -305,7 +310,10 @@ class Writer:
         mkind = str(op.get("kind") or "fact").lower()
         if mkind not in KINDS:
             mkind = "fact"
-        owner = op.get("owner") if op.get("owner") in ("you", "other") and mkind == "todo" else None
+        owner = None
+        if mkind == "todo":
+            owner = op.get("owner") if op.get("owner") in ("you", "other") else (
+                "you" if is_you(msg["author"]) else "other")
         event_at = parse_event_at(op.get("event_at"), said)
         if event_at and mkind in ("event", "todo"):
             snapped = snap_weekday(event_at, quote, said) if weekday_in(quote) is not None else (

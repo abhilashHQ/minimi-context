@@ -17,6 +17,7 @@ from harness.write import Writer
 
 MERGE_COSINE = 0.92
 BATCH = 10
+CLOSE_BATCH = 1
 EVIDENCE = 3
 
 SETTLE_PROMPT = """You maintain a personal memory for one user, called "You". Some memories may describe the same thing or contradict each other. For each group, decide using the source messages and when they were said. Reply with JSON only.
@@ -30,7 +31,7 @@ Decisions for a pair (a, b):
 JSON shape: {"decisions": [{"group": "g1", "a": "m1", "b": "m2", "decision": "...", "why": "..."}]}
 """
 
-CLOSE_PROMPT = """You maintain a personal memory for one user, called "You". Each open item below is a commitment, plan or state that is still marked open. Under it is later evidence from any conversation. Decide if the evidence shows the item is done, cancelled or no longer true. A reminder, a repeat of the request, or a mention is not closure. Someone thanking the user for doing exactly the thing, or the user sharing the result, is closure. People may appear under different names (a landlord may be "Mr. Kapoor"); use the content to match. Reply with JSON only.
+CLOSE_PROMPT = """You maintain a personal memory for one user, called "You". Each open item below is a commitment, plan or state that is still marked open. Under it is later evidence from any conversation. Decide if the evidence shows the item is done, cancelled or no longer true. A reminder, a repeat of the request, or a mention is not closure. Someone thanking the user for doing exactly the thing, or the user sharing the result, is closure. People are often named differently in different places (a role in one message, a name in another); match on what the evidence says was done. Reply with JSON only.
 
 JSON shape: {"closes": [{"item": "t1", "evidence": "e2", "quote": "words copied from that evidence", "why": "..."}]}
 Only list items that are closed. An empty list is fine.
@@ -193,14 +194,14 @@ class Dreamer:
         items = [m for m in self.store.current(now)
                  if m["kind"] == "todo" or (m["kind"] == "event" and (m["event_at"] or "") >= now)]
         everything = self.store.memories()
-        for chunk in _chunks(items, BATCH):
+        for chunk in _chunks(items, CLOSE_BATCH):
             lines, ev_map = [], {}
             for i, m in enumerate(chunk):
                 lines.append(self._describe(f"t{i + 1}", m))
                 evidence = self._evidence(m, everything)
                 if not evidence:
                     lines.append("  (no later evidence)")
-                for label, kind, ref, said, text in evidence:
+                for _label, kind, ref, said, text in evidence:
                     key = f"e{len(ev_map) + 1}"
                     ev_map[key] = (kind, ref, said, text, f"t{i + 1}")
                     lines.append(f"  {key} · {said[:16]} · {text}")
