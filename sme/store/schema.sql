@@ -1,3 +1,3 @@
-CREATE TABLE conversations (id TEXT PRIMARY KEY, app TEXT NOT NULL CHECK (app IN ('whatsapp_web','gmail')), external_key TEXT NOT NULL, title TEXT NOT NULL, UNIQUE (app, external_key));
+CREATE TABLE conversations (id TEXT PRIMARY KEY, app TEXT NOT NULL CHECK (app IN ('whatsapp_web','gmail','gmail_connector','calendar')), external_key TEXT NOT NULL, title TEXT NOT NULL, UNIQUE (app, external_key));
 CREATE TABLE messages (id TEXT PRIMARY KEY, conversation_id TEXT NOT NULL REFERENCES conversations(id), sender_label TEXT NOT NULL, direction TEXT NOT NULL CHECK (direction IN ('in','out')), body TEXT NOT NULL, body_norm TEXT NOT NULL, sent_at TEXT, sent_minute TEXT, date_source TEXT NOT NULL CHECK (date_source IN ('absolute','separator','unknown')), occurrence INTEGER NOT NULL DEFAULT 1, is_partial INTEGER NOT NULL DEFAULT 0, first_observed_at TEXT NOT NULL, last_observed_at TEXT NOT NULL);
 CREATE VIRTUAL TABLE messages_fts USING fts5(body, content='messages');
