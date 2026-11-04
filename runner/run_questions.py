@@ -42,6 +42,7 @@ SYSTEM_PROMPT = (
 SYSTEMS = {
     "baseline": "baseline.server",
     "minimi_shape": "baseline.minimi_shape",
+    "harness": "harness.server",
 }
 TIMEOUT_SECONDS = 900
 

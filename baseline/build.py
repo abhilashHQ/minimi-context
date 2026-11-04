@@ -269,13 +269,14 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--rebuild", action="store_true", help="delete the database first instead of resuming"
     )
+    parser.add_argument("--llm", choices=["gemini", "bedrock"], default="gemini")
     args = parser.parse_args(argv)
 
     from baseline.embed import SentenceTransformerEmbedder
-    from sme.llm.client import GeminiClient
+    from sme.llm.client import BedrockClient, GeminiClient
 
     scenario = repo.read_scenario(args.scenario)
-    llm = GeminiClient()
+    llm = BedrockClient() if args.llm == "bedrock" else GeminiClient()
     embedder = SentenceTransformerEmbedder()
 
     db = Path(args.db)

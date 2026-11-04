@@ -85,3 +85,34 @@ def retry_delay_seconds(details: Any, default: float = 60.0) -> float:
     """Read the RetryInfo delay, like "40s", from a Gemini 429 error body."""
     match = re.search(r"'retryDelay': '([\d.]+)s'", repr(details))
     return float(match.group(1)) if match else default
+
+
+class BedrockClient:
+    """gpt-oss-120b on Bedrock through converse. Bedrock has no response schema here, so the
+    schema goes into the prompt and the reply's outermost JSON value is parsed."""
+
+    def __init__(self, model: str = "openai.gpt-oss-120b-1:0", region: str = "us-east-1") -> None:
+        import boto3
+        from botocore.config import Config
+
+        self.model = model
+        self._client = boto3.client(
+            "bedrock-runtime", region_name=region,
+            config=Config(read_timeout=300, retries={"max_attempts": 6, "mode": "adaptive"}),
+        )
+
+    def generate_json(self, prompt: str, schema: dict[str, Any]) -> Any:
+        text = f"{prompt}\n\nReply with JSON only, matching this JSON schema:\n{json.dumps(schema)}"
+        reply = self._client.converse(
+            modelId=self.model,
+            messages=[{"role": "user", "content": [{"text": text}]}],
+            inferenceConfig={"maxTokens": 8000, "temperature": 0},
+            additionalModelRequestFields={"reasoning_effort": "low"},
+        )
+        out = "".join(c.get("text", "") for c in reply["output"]["message"]["content"])
+        starts = [i for i in (out.find("{"), out.find("[")) if i >= 0]
+        if not starts:
+            raise RuntimeError(f"no JSON in reply from {self.model}")
+        start = min(starts)
+        end = out.rfind("}" if out[start] == "{" else "]")
+        return json.loads(out[start : end + 1])

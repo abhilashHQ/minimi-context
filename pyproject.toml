@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["sme*", "baseline*", "corpus*", "runner*"]
+include = ["sme*", "baseline*", "corpus*", "runner*", "harness*"]
 
 [tool.setuptools.package-data]
 "sme.store" = ["schema.sql"]
