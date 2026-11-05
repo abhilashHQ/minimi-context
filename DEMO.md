@@ -72,4 +72,4 @@ py -m corpus.scenario_d build
 py -m harness.cli replay --corpus corpus/scenario_d.json --db runs/harness/d.db
 py -m baseline.build --scenario corpus/scenario_d.json --db runs/baseline_d/d.db --llm bedrock
 ```
-Both use gpt-oss-120b on Bedrock (us-east-1). The harness replay is about 900 calls, roughly 45 minutes and $1. Its calls are cached in the store, so a rerun with the same prompts costs nothing.
+Both use gpt-oss-120b on Bedrock (us-east-1). The last full harness replay made 936 calls (916 write, the rest dream) in 52 minutes, with 2.0M tokens in and 0.45M out, which comes to under $1. The calls are cached inside the store, so replaying into the same store with the same prompts costs nothing. A fresh store re-calls everything.

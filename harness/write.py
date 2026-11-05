@@ -52,7 +52,7 @@ Rules:
 - "Same as last time" and similar phrases: work out the real value from the candidates. "Last time" is the most recent earlier occurrence by its date (event_at), in its current version, not the usual or most frequent one.
 - The same thing often arrives again from another app (an email copy, a calendar entry). If a candidate already says it, use same, even when the candidate is ended.
 - Most chat is small talk: skip it unless it closes or changes something. Opinions about movies, memes, sports or the news, jokes, reactions ("haha", "riveting drama"), and passing remarks are small talk. Write a fact or preference only if it would still matter to the user weeks later, like a diet, an allergy, a job, an address, a relationship, or an identifier.
-- Most chunks need no ops at all. An empty ops list is the right answer for pure chat.
+- Pure chat needs no ops; an empty ops list is fine for it. But when a message agrees to, repeats or confirms something a candidate already says (from any app), always give a same op for it, so the memory keeps every source.
 - Give the end state of the chunk: if something changed twice inside the chunk, report only the final version.
 - event_at is "YYYY-MM-DDTHH:MM" for a time, or "YYYY-MM-DD" for a due date without a time.
 
