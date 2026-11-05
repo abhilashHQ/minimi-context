@@ -14,7 +14,7 @@ from typing import Any
 import numpy as np
 
 from harness.store import OPEN_KINDS, Store
-from harness.text import Embedder, dt, human_time, iso, overlap, same_person
+from harness.text import Embedder, dt, human_time, is_you, iso, overlap, same_person
 
 RRF_K = 60
 VECTOR_K = 40
@@ -29,6 +29,8 @@ SCORE_FLOOR = 0.35
 RELATED_COSINE = 0.2
 KEYWORD_K = 10
 DEFAULT_TOKENS = 1500
+BACK_REFERENCE = re.compile(r"\b(same as (last time|before|usual)|same (time|again)|as usual|like last time)\b", re.I)
+BASIS_COSINE = 0.6
 APP_LABEL = {"screen": None, "gmail": "gmail", "calendar": "calendar"}
 SCREEN_APP = {"whatsapp_web": "whatsapp", "gmail": "gmail"}
 
@@ -250,7 +252,7 @@ class Retriever:
             a = SCREEN_APP.get(s["app"], s["app"]) if s["kind"] == "screen" else s["kind"]
             if a not in apps:
                 apps.append(a)
-        quote = next((s["quote"] for s in srcs if s["role"] == "created" and s["quote"]), None)
+        quote = next((s["quote"] for s in srcs if s["role"] in ("created", "confirmed") and s["quote"]), None)
         return "+".join(apps), quote
 
     def history(self, m: dict[str, Any]) -> str:
@@ -263,9 +265,36 @@ class Retriever:
             timed = old["event_at"] and m["event_at"] and old["event_at"] != m["event_at"]
             what = human_time(old["event_at"]) if timed else old["text"]
             by = self.store.source(link["source_id"]) if link["source_id"] else None
-            how = f" by {_whose(by['author'])} {self._medium(by)}" if by else ""
-            return f" (was: {what}, changed {human_time(link['at'], False)}{how})"
+            return f" (was: {what}, changed {human_time(link['at'], False)}{self._how(by)})"
         return ""
+
+    def _how(self, src: dict[str, Any] | None) -> str:
+        """Who changed it. A change you accepted is told as the conversation it happened in."""
+        if not src:
+            return ""
+        if not is_you(src["author"]):
+            return f" by {src['author']}'s {self._medium(src)}"
+        other = self.store.db.execute(
+            "SELECT author FROM sources WHERE thread_key = ? AND lower(author) NOT IN ('you', 'me')"
+            " AND said_at <= ? ORDER BY said_at DESC LIMIT 1",
+            (src["thread_key"], src["said_at"]),
+        ).fetchone()
+        medium = "email" if src["app"] in ("gmail", "gmail_connector") else self._medium(src)
+        return f" over {medium} with {other['author']}" if other else f" by your {medium}"
+
+    def basis(self, m: dict[str, Any], quote: str) -> str:
+        """For an event agreed by referring back ("same as last time"), name the earlier event the
+        value came from, with that event's own history."""
+        if m["kind"] != "event" or not m["event_at"] or not BACK_REFERENCE.search(quote):
+            return ""
+        earlier = [x for x in self.store.memories("kind = 'event' AND valid_to IS NULL AND event_at < ?",
+                                                  (m["event_at"],))
+                   if x["id"] != m["id"] and overlap(x["people"], m["people"])
+                   and float(self.store.vector(x["id"]) @ self.store.vector(m["id"])) >= BASIS_COSINE]
+        if not earlier:
+            return ""
+        prev = max(earlier, key=lambda x: x["event_at"])
+        return f"based on [m{prev['id']}] {human_time(prev['event_at'])}{self.history(prev)}"
 
     @staticmethod
     def _medium(s: dict[str, Any]) -> str:
@@ -295,6 +324,9 @@ class Retriever:
             parts.append(f'"{quote}"')
         if apps:
             parts.append(apps)
+        basis = self.basis(m, quote) if quote else ""
+        if basis:
+            parts.append(basis)
         if m["id"] in conflicts:
             parts.append("possible conflict with " + ", ".join(f"[m{i}]" for i in conflicts[m["id"]]))
         return " · ".join(parts)
