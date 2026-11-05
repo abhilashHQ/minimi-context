@@ -1,131 +1,82 @@
-# minimi-context
+# minimi memory harness
 
-A person context layer on top of minimi. It organizes the memories minimi already generates around people, then retrieves what matters at the moment you return to someone or ask.
+A memory layer that sits between minimi's capture and the model that reads it. It keeps memory small and current as connectors multiply, so one cheap tool call answers the question instead of five.
 
-Implementation contract: [SPEC.md](SPEC.md).
+minimi just added Gmail and Calendar connectors. Now the same fact arrives from three places (the WhatsApp chat on screen, the email, the calendar invite), some copies are stale, and a flood of promo mail rides along. On an append-only pile of memories that is context rot: more near-duplicates that look like the answer. The harness decides, at write time, what each new message changes.
 
-## Screen Memory Engine: P1 search-only baseline
+<p align="center"><img src="docs/img/headline.svg" alt="Harness 22 of 24 answers correct vs minimi today 14 of 24; 1.7 vs 4.9 tool calls; 1,085 vs 4,319 tokens read from memory"></p>
 
-This is the go or no-go test that runs before the engine is built. A plain search-only baseline answers the fixed questions in `corpus/expected.yaml` over a fictional corpus (`corpus/scenario_a.json`, `corpus/scenario_b.json`). A human judges the saved transcripts. All names and messages are fictional.
+Same fictional month on both sides, same reader (Claude Opus), same 8 questions, 3 runs each. Details and caveats in [How it was scored](#how-it-was-scored).
 
-### Install (Windows, PowerShell, Python 3.11)
+## See it
+
+**"What time is dinner with Sam tomorrow?"** Sam moved last week's dinner from 8 to 9:30 by email, then asked on WhatsApp "Dinner Friday, same as last time?". minimi today finds the old 8 PM calendar entries and hedges. The harness answers in one call and shows where 9:30 came from.
+
+![C1 side by side](docs/img/c1_dinner.png)
+
+**What Claude actually reads for "What's on this weekend?"** Six of minimi's top ten hits are promo mail from the new Gmail connector, plus a brunch from three weeks ago. The harness hands over the whole answer in 159 tokens.
+
+![C8 what Claude reads](docs/img/c8_what_claude_reads.png)
+
+**A new message arrives.** Sam pushes dinner to 10. minimi appends two more lines next to the 9:30 ones. The harness replaces the memory, keeps 9:30 as history, and says what changed it.
+
+![Live moment](docs/img/live_moment.png)
+
+## Every question, every run
+
+<p align="center"><img src="docs/img/per_question.svg" alt="Per-question results: three runs each for minimi today and the harness, with mean tool calls"></p>
+
+| | minimi today | harness |
+|---|---|---|
+| Runs judged correct | 14 / 24 | **22 / 24** |
+| Questions correct on all 3 runs | 4 / 8 | **6 / 8** |
+| Tool calls per question | 4.9 | **1.7** |
+| Tokens read from memory per question | 4,319 | **1,085** |
+| Answer time | 40.1 s | **33.6 s** |
+
+Per-question numbers: [SCORECARD.md](SCORECARD.md).
+
+## How it works
+
+Four jobs, borrowed from the memory systems that already work and fitted to minimi's shape (screen capture plus connectors in, local SQLite out, MCP to whatever model the user picks).
+
+| Job | What happens | Where it comes from |
+|---|---|---|
+| **Write** | Raw messages are stored and deduplicated across capture paths. Promo and bulk mail is gated out. Messages are grouped into bursts per thread (60 min quiet, 4 h, or 20 messages). One LLM call per burst sees the burst plus up to 40 related memories (same thread, same people, similar text) and returns ops: `new`, `same`, `replaces`, `extends`, `ends`. Every op must quote its message word for word; code checks the quote, the target, the people and the time order before applying it. | Supermemory (grouping, updates/extends, latest flag), Mem0 (candidates in one reconcile call), Zep (said-at vs seen-at, invalidate instead of delete) |
+| **Retrieve** | `minimi_get_context(question)` with no LLM at read time: parse the question into filters (owe, waiting on, this weekend, last week...), fuse vector, BM25 and filter lists with RRF, weight by time fit, drop near-duplicates, attach one hop of history ("was 8 PM, changed by Sam's email"), add a Changed recently section, cap at 1,500 tokens, and say in a footer if anything was cut. | Zep (RRF + MMR), Generative Agents (recency), Chroma's context rot report (never show a stale version as a peer) |
+| **Forget** | Nothing is deleted. Replaced and ended memories stay as history; statuses expire; past events and old chatter decay in ranking only. | Mem0 v3 (never destroy), Supermemory (decay by kind) |
+| **Dream** | A background pass at night: expire, retry failed bursts, settle contradictions (same-day events, related facts about one person), close stale commitments against later evidence ("Thanks for calling" closes "call the landlord"), merge near-duplicates. | Letta sleep-time agents |
+
+Full design: [docs/design.md](docs/design.md). Code: [`harness/`](harness).
+
+```
+capture + connectors ──> W1 store raw ──> W2 gate ──> W3 bursts ──> W5 candidates ──> W6 one LLM call
+                                                                                         │
+ Claude ── minimi_get_context ──> R1..R10 (no LLM) ──> SQLite memories <── W7 validate + W8 apply
+                                                            ▲
+                                                 dream (nightly): expire, retry, settle, close, merge
+```
+
+What the final store holds after a month of 1,334 messages and 354 connector emails: **61 lasting memories** (5 open todos, 11 events, 14 facts, 31 preferences) plus a log of chat episodes that decay in ranking. All 19 end-state checks pass: exactly the five real open todos, the four done ones closed (one of them only through the dream), the stale 8 PM invite never revived, Priya's flight number kept on Priya.
+
+## How it was scored
+
+- **Data is fictional.** `corpus/scenario_d.json`: a month of one person's WhatsApp (seen on screen) and Gmail, plus what Gmail and Calendar connectors would add: copies of every email, 300 promo mails with deliberate distractors ("Friday dinner for two at 8 PM", "6E 2131 to Delhi"), 8 calendar events including one stale invite.
+- **"minimi today" is a clone of the shape, not minimi.** `baseline/minimi_shape.py` exposes the four tools of minimi's hosted connector (`search_memory`, `list_active_threads`, `get_latest_context`, `meeting_memory`) over one memory per message, written by the same model the harness uses (gpt-oss-120b). It's how minimi's memory works today as far as the public connector shows; it is not minimi's code.
+- **Reader:** headless `claude -p` with Opus and only one side's connector. **Judge:** Opus seeing only the question, the rubric in `corpus/scenario_c_questions.yaml` and the final answer, never the tool calls. I read every failed verdict; the harness's two fails are date precision (a "this weekend" deadline given as Saturday; a sent date not stated) and stay counted as fails.
+- **Cost:** the harness replay of the whole month is 942 gpt-oss-120b calls on Bedrock, about an hour, under $1. Reads cost nothing.
+- **Known gaps:** chat episodes are still stored (they decay, they don't vanish); Bedrock is not deterministic at temperature 0, so a fresh replay can land a check or two differently; the corpus is one person and one month.
+
+## Run it
 
 ```powershell
-cd C:\path\to\minimi-context
-py -3.11 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -e .
-pytest
-ruff check .
+py -3.11 -m venv .venv; .\.venv\Scripts\Activate.ps1; pip install -e .
+python -m corpus.scenario_d build
+python -m harness.cli replay --corpus corpus/scenario_d.json --db runs/harness/d.db   # needs AWS Bedrock access
+python -m harness.cli ask --db runs/harness/d.db "What do I still owe people?"
+python -m harness.server --db runs/harness/d.db                                         # MCP over stdio
 ```
 
-### Build scenario A and B
+Demo with both sides in Claude Desktop, the live moment, and the full scorecard: [DEMO.md](DEMO.md). The images in this README are rebuilt from the run data by `python -m docs.make_assets`.
 
-The build asks Gemini for exactly one memory per message, sending each conversation in chunks of at most 40 messages with the 5 messages before each chunk as context, and embeds each memory with `all-MiniLM-L6-v2`. The first run downloads that model to the Hugging Face cache, and the server reuses it.
-
-```powershell
-$env:GEMINI_API_KEY = "<your key>"
-python -m baseline.build --scenario a --db runs\p1\a.db
-python -m baseline.build --scenario b --db runs\p1\b.db
-```
-
-Add `--rebuild` to delete an existing database and build it again. Without it, the build resumes: chunks that finished before a crash are skipped. It refuses a database built from a different scenario, or one built before chunking existed.
-
-### Claude Desktop config
-
-Edit `%APPDATA%\Claude\claude_desktop_config.json`. Use one scenario at a time and restart Claude Desktop after switching. Replace `C:\\path\\to\\minimi-context` with the real path.
-
-Scenario A:
-
-```json
-{
-  "mcpServers": {
-    "memory": {
-      "command": "C:\\path\\to\\minimi-context\\.venv\\Scripts\\python.exe",
-      "args": [
-        "-m", "baseline.server",
-        "--db", "C:\\path\\to\\minimi-context\\runs\\p1\\a.db",
-        "--now", "2026-11-12T20:00:00+05:30"
-      ]
-    }
-  }
-}
-```
-
-Scenario B:
-
-```json
-{
-  "mcpServers": {
-    "memory": {
-      "command": "C:\\path\\to\\minimi-context\\.venv\\Scripts\\python.exe",
-      "args": [
-        "-m", "baseline.server",
-        "--db", "C:\\path\\to\\minimi-context\\runs\\p1\\b.db",
-        "--now", "2026-11-13T17:00:00+05:30"
-      ]
-    }
-  }
-}
-```
-
-The server exposes exactly three tools: `search_memory`, `list_active_threads` and `get_latest_context`. Every response includes `as_of`, set to `--now`.
-
-### Claude Desktop project instructions
-
-Create one Claude Desktop project for P1 and use it for every P1 chat. Set its instructions to exactly:
-
-```text
-Use the memory tools to answer. If memory has no answer, say you don't know.
-```
-
-### Running the questions and saving transcripts
-
-1. Load the scenario's config (Q1 to Q6 use scenario A, Q7 uses scenario B) and restart Claude Desktop.
-2. Start a new chat in the P1 project for each question and paste the question exactly as written in `corpus/expected.yaml`.
-3. When the answer finishes, expand every tool call, then copy the question, each tool call with its result, and the final answer.
-4. Save that into `runs\p1\<scenario>-<question id>.md`, for example `runs\p1\a-q1.md` and `runs\p1\b-q7.md`. Put the date and the model name on the first line.
-5. Judge each transcript by hand against the required elements in `corpus/expected.yaml`.
-
-`runs/` is git-ignored, so databases and transcripts stay local.
-
-## Scenario C on Windows
-
-Scenario C replaces the scenario A gate: about 1,300 messages over Nov 2 to 26, 2026, with 48 planted messages (`corpus/scenario_c/planted.json`) and generated noise. The questions are in `corpus/scenario_c_questions.yaml`. Run these in order from the repo root with the venv active. Reinstall once first, because this adds the `corpus` and `runner` packages:
-
-```powershell
-python -m pip install -e .
-$env:GEMINI_API_KEY = "<your key>"
-```
-
-1. Generate the noise. It makes about 180 Gemini calls, saves after each conversation day, and resumes if you run it again. It never discards existing noise unless you pass `--force`.
-
-```powershell
-python -m corpus.noise --out corpus\scenario_c\noise.json
-```
-
-2. Merge planted and noise into `corpus\scenario_c.json`.
-
-```powershell
-python -m corpus.scenario_c build
-```
-
-3. Check the merged corpus. It must print `OK`; any failure is printed with its label and the exit code is 1.
-
-```powershell
-python -m corpus.check corpus\scenario_c.json
-```
-
-4. Build the baseline database. It prints progress per chunk and resumes after a crash.
-
-```powershell
-python -m baseline.build --scenario c --db runs\p1c\c.db
-```
-
-5. Run the questions headless. This needs Claude Code on PATH and logged in. Each answer goes to `runs\p1b\baseline\<question>-<run>.json` with every tool call and its result; runs that already have a file are skipped unless you pass `--force`.
-
-```powershell
-python -m runner.run_questions --system baseline --db runs\p1c\c.db --now 2026-11-26T20:00:00+05:30 --questions corpus\scenario_c_questions.yaml --runs 3 --out runs\p1b\baseline
-```
-
-Once step 3 passes, commit `corpus\scenario_c\noise.json` and `corpus\scenario_c.json`. The noise is frozen after the first baseline run and is never regenerated. Judge each saved answer by hand against the required elements in `corpus/scenario_c_questions.yaml`.
+Earlier work in this repo (the P1 search-only baseline): [docs/p1-baseline.md](docs/p1-baseline.md).
