@@ -275,7 +275,6 @@ def page_c8() -> str:
         hits.append(f'<div class="hit">{chip}<span>{html.escape(text)}</span>{flag}</div>')
     pack = h["tool_calls"][0]["result"]["result"]
     t_calls, h_calls = len(t["tool_calls"]), len(h["tool_calls"])
-    q = html.escape(search["input"]["query"])
     return (f'<div class="frame"><div class="q">C8 · run 1 of 3 · what Claude actually reads</div>'
             f'<h1>"What\'s on this weekend?"</h1><div class="cols">'
             f'<div class="card"><div class="who"><span class="dot" style="background:{TODAY_DK}"></span>minimi today'
