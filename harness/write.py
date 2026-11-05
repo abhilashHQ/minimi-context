@@ -42,6 +42,7 @@ Ops:
 
 Rules:
 - Every op cites one message as msg (b1, b2, ...) and a quote copied word for word from that message.
+- "You" in a memory always means the user. When someone else writes "my" or "I", it is about them: write their name ("Priya's flight", not "your flight").
 - Resolve relative dates ("Friday", "tomorrow", "next Friday") against the cited message's own date, never today. Use the calendar given with the messages to look up weekdays; don't compute them yourself.
 - A time without AM or PM takes the obvious meaning from context: dinner, drinks and "tonight" are evening, breakfast and brunch are morning.
 - An event that simply happened is not ended. Only end an event that was cancelled or replaced.

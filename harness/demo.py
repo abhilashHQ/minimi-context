@@ -38,9 +38,12 @@ def reset() -> None:
     for src, dst in ((BUILT_HARNESS, DEMO_HARNESS), (BUILT_BASELINE, DEMO_BASELINE)):
         if not src.exists():
             sys.exit(f"missing {src}; build it first")
-        for suffix in ("", "-wal", "-shm"):
-            Path(str(dst) + suffix).unlink(missing_ok=True)
-        shutil.copyfile(src, dst)
+        try:
+            for suffix in ("", "-wal", "-shm"):
+                Path(str(dst) + suffix).unlink(missing_ok=True)
+            shutil.copyfile(src, dst)
+        except PermissionError:
+            sys.exit(f"{dst} is in use. Quit Claude Desktop fully, then run reset again.")
         print(f"{src.relative_to(ROOT)} -> {dst.relative_to(ROOT)}")
 
 

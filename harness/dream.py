@@ -18,6 +18,7 @@ from harness.text import Embedder, overlap
 from harness.write import Writer
 
 MERGE_COSINE = 0.92
+SETTLE_FACT_COSINE = 0.45
 BATCH = 10
 CLOSE_BATCH = 1
 EVIDENCE = 3
@@ -163,6 +164,11 @@ class Dreamer:
         events = [m for m in self.store.current(now) if m["kind"] == "event" and m["event_at"]]
         for a, b in combinations(events, 2):
             if a["event_at"][:10] == b["event_at"][:10] and overlap(a["people"], b["people"]):
+                pairs.append((a, b))
+        lasting = [m for m in self.store.current(now) if m["kind"] in ("fact", "preference") and m["people"]]
+        for a, b in combinations(lasting, 2):
+            if overlap(a["people"], b["people"]) and float(
+                    self.store.vector(a["id"]) @ self.store.vector(b["id"])) >= SETTLE_FACT_COSINE:
                 pairs.append((a, b))
         seen: set[tuple[int, int]] = set()
         uniq = []
