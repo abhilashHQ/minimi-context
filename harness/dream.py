@@ -18,7 +18,7 @@ from harness.text import Embedder, overlap
 from harness.write import Writer
 
 MERGE_COSINE = 0.92
-SETTLE_FACT_COSINE = 0.45
+SETTLE_FACT_COSINE = 0.4
 BATCH = 10
 CLOSE_BATCH = 1
 EVIDENCE = 3
