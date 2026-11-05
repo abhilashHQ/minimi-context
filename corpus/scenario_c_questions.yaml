@@ -1,0 +1,70 @@
+# Questions for the P1b scenario C gate.
+# A human judges each saved answer against the required elements.
+# There is no automated scorer.
+#
+# Scenario C "now": 2026-11-26T20:00:00+05:30 (Thursday)
+# All times are Asia/Kolkata (IST).
+
+questions:
+  - id: C1
+    scenario: c
+    question: What time is dinner with Sam tomorrow?
+    required:
+      - 9:30 PM
+      - Friday November 27
+      - says "same as last time" refers to the Nov 20 dinner, which Sam's Nov 18 email moved from 8 to 9:30
+      - never says the dinner is at 8
+
+  - id: C2
+    scenario: c
+    question: What do I still owe people?
+    required:
+      - "All 5 open commitments with their due dates: fill in the offsite form (by Fri Nov 27), Mom's train tickets for Dec 5 (book by Fri Nov 27), pay Rohan back 1,200 (by Sun Nov 29), send Priya the cap table (by Mon Nov 30), send Anu the Diwali photos (promised for the weekend of Nov 14-15)"
+      - the Diwali photos marked overdue
+      - "none of these 4 closed commitments listed as still owed: the deck for Priya (sent Nov 13), the Q4 numbers for Dev (sent Nov 25), calling the landlord (done Nov 17), returning Meera's charger (returned Nov 18)"
+
+  - id: C3
+    scenario: c
+    question: Do I owe Priya anything?
+    required:
+      - Yes, the cap table by November 30, quoting c06
+      - says you already sent the deck, on WhatsApp on November 13 (only saying Priya asked for it there is not enough)
+      - never says the deck is still owed
+
+  - id: C4
+    scenario: c
+    question: Did I call the landlord?
+    required:
+      - Yes, on November 17
+      - quotes c34
+
+  - id: C5
+    scenario: c
+    question: What did I agree to last week, Monday to Sunday?
+    required:
+      - "Exactly these 7: landlord call (c37), dinner moved to 9:30 (c02), Meera's charger (c39), offsite form (c12), cap table (c06), Mom's train tickets (c46), paying Rohan back (c42)"
+      - nothing outside Nov 16 to 22
+
+  - id: C6
+    scenario: c
+    question: Does Sam have any food restrictions?
+    required:
+      - Eats fish since November 19, quoting c22
+      - was vegetarian before
+      - never says Sam is currently vegetarian
+      - never says Sam eats meat
+
+  - id: C7
+    scenario: c
+    question: What's Sam's flight number?
+    required:
+      - Says it doesn't know
+      - never gives 6E 2134 as Sam's
+
+  - id: C8
+    scenario: c
+    question: What's on this weekend?
+    required:
+      - Brunch with Sam and Arjun, Saturday November 28 at 9:30 AM
+      - lunch at home, Sunday November 29 at 1 PM
+      - does not list the November 7 brunch

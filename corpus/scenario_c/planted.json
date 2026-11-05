@@ -1,0 +1,501 @@
+{
+  "scenario": "c",
+  "description": "Fictional test corpus, planted messages only. All times are Asia/Kolkata (IST, +05:30). Conversations are listed in ingest order and messages within a conversation in time order.",
+  "now": "2026-11-26T20:00:00+05:30",
+  "conversations": [
+    {
+      "app": "gmail",
+      "key": "friday-dinner",
+      "title": "Friday dinner"
+    },
+    {
+      "app": "gmail",
+      "key": "investor-deck",
+      "title": "Investor deck"
+    },
+    {
+      "app": "gmail",
+      "key": "q4-numbers",
+      "title": "Q4 numbers"
+    },
+    {
+      "app": "gmail",
+      "key": "offsite",
+      "title": "Team offsite"
+    },
+    {
+      "app": "gmail",
+      "key": "standup",
+      "title": "Standup notes"
+    },
+    {
+      "app": "gmail",
+      "key": "newsletter",
+      "title": "The Weekly Byte"
+    },
+    {
+      "app": "whatsapp_web",
+      "key": "sam",
+      "title": "Sam"
+    },
+    {
+      "app": "whatsapp_web",
+      "key": "priya",
+      "title": "Priya"
+    },
+    {
+      "app": "whatsapp_web",
+      "key": "kapoor",
+      "title": "Mr. Kapoor"
+    },
+    {
+      "app": "whatsapp_web",
+      "key": "flat-4b",
+      "title": "Flat 4B"
+    },
+    {
+      "app": "whatsapp_web",
+      "key": "family",
+      "title": "Family"
+    },
+    {
+      "app": "whatsapp_web",
+      "key": "college",
+      "title": "College gang"
+    }
+  ],
+  "messages": [
+    {
+      "label": "c01",
+      "app": "gmail",
+      "thread": "friday-dinner",
+      "sender": "Samuel Rao",
+      "sent_at": "2026-11-18T10:15:00+05:30",
+      "date_source": "absolute",
+      "body": "Can we do 9:30 this Friday instead of 8? My evening class runs late now."
+    },
+    {
+      "label": "c02",
+      "app": "gmail",
+      "thread": "friday-dinner",
+      "sender": "You",
+      "sent_at": "2026-11-18T10:40:00+05:30",
+      "date_source": "absolute",
+      "body": "9:30 works. See you then."
+    },
+    {
+      "label": "c03",
+      "app": "gmail",
+      "thread": "investor-deck",
+      "sender": "Priya Nair",
+      "sent_at": "2026-11-10T11:00:00+05:30",
+      "date_source": "absolute",
+      "body": "Can you send me the deck by Friday evening?"
+    },
+    {
+      "label": "c04",
+      "app": "gmail",
+      "thread": "investor-deck",
+      "sender": "You",
+      "sent_at": "2026-11-10T11:30:00+05:30",
+      "date_source": "absolute",
+      "body": "Yes, I'll send it by 6 PM on Friday."
+    },
+    {
+      "label": "c05",
+      "app": "gmail",
+      "thread": "investor-deck",
+      "sender": "Priya Nair",
+      "sent_at": "2026-11-20T09:30:00+05:30",
+      "date_source": "absolute",
+      "body": "Can you also send the cap table by the end of the month?"
+    },
+    {
+      "label": "c06",
+      "app": "gmail",
+      "thread": "investor-deck",
+      "sender": "You",
+      "sent_at": "2026-11-20T10:05:00+05:30",
+      "date_source": "absolute",
+      "body": "Will do, I'll send the cap table by November 30."
+    },
+    {
+      "label": "c07",
+      "app": "gmail",
+      "thread": "q4-numbers",
+      "sender": "Dev Mehta",
+      "sent_at": "2026-11-23T09:45:00+05:30",
+      "date_source": "absolute",
+      "body": "Can you send the Q4 numbers by Wednesday?"
+    },
+    {
+      "label": "c08",
+      "app": "gmail",
+      "thread": "q4-numbers",
+      "sender": "You",
+      "sent_at": "2026-11-23T10:00:00+05:30",
+      "date_source": "absolute",
+      "body": "Yes, I'll send them by Wednesday end of day."
+    },
+    {
+      "label": "c09",
+      "app": "gmail",
+      "thread": "q4-numbers",
+      "sender": "You",
+      "sent_at": "2026-11-25T18:10:00+05:30",
+      "date_source": "absolute",
+      "body": "Attached are the Q4 numbers."
+    },
+    {
+      "label": "c10",
+      "app": "gmail",
+      "thread": "q4-numbers",
+      "sender": "Dev Mehta",
+      "sent_at": "2026-11-25T18:30:00+05:30",
+      "date_source": "absolute",
+      "body": "Got them, thanks."
+    },
+    {
+      "label": "c11",
+      "app": "gmail",
+      "thread": "offsite",
+      "sender": "Dev Mehta",
+      "sent_at": "2026-11-19T15:00:00+05:30",
+      "date_source": "absolute",
+      "body": "Please fill in the offsite form by Friday the 27th."
+    },
+    {
+      "label": "c12",
+      "app": "gmail",
+      "thread": "offsite",
+      "sender": "You",
+      "sent_at": "2026-11-19T15:20:00+05:30",
+      "date_source": "absolute",
+      "body": "Will do, I'll fill it in by the 27th."
+    },
+    {
+      "label": "c13",
+      "app": "whatsapp_web",
+      "thread": "sam",
+      "sender": "Sam",
+      "sent_at": "2026-11-02T19:05:00+05:30",
+      "date_source": "separator",
+      "body": "Dinner Friday at 8? Usual place"
+    },
+    {
+      "label": "c14",
+      "app": "whatsapp_web",
+      "thread": "sam",
+      "sender": "You",
+      "sent_at": "2026-11-02T19:07:00+05:30",
+      "date_source": "separator",
+      "body": "Yes, 8 works"
+    },
+    {
+      "label": "c15",
+      "app": "whatsapp_web",
+      "thread": "sam",
+      "sender": "Sam",
+      "sent_at": "2026-11-03T12:30:00+05:30",
+      "date_source": "separator",
+      "body": "Remember I'm vegetarian, so not the kebab place"
+    },
+    {
+      "label": "c16",
+      "app": "whatsapp_web",
+      "thread": "sam",
+      "sender": "Sam",
+      "sent_at": "2026-11-04T18:00:00+05:30",
+      "date_source": "separator",
+      "body": "Brunch this Saturday at 10?"
+    },
+    {
+      "label": "c17",
+      "app": "whatsapp_web",
+      "thread": "sam",
+      "sender": "You",
+      "sent_at": "2026-11-04T18:02:00+05:30",
+      "date_source": "separator",
+      "body": "Sure"
+    },
+    {
+      "label": "c18",
+      "app": "whatsapp_web",
+      "thread": "sam",
+      "sender": "Sam",
+      "sent_at": "2026-11-06T22:40:00+05:30",
+      "date_source": "separator",
+      "body": "Good dinner. Same time next Friday?"
+    },
+    {
+      "label": "c19",
+      "app": "whatsapp_web",
+      "thread": "sam",
+      "sender": "You",
+      "sent_at": "2026-11-06T22:42:00+05:30",
+      "date_source": "separator",
+      "body": "Yes, 8 again"
+    },
+    {
+      "label": "c20",
+      "app": "whatsapp_web",
+      "thread": "sam",
+      "sender": "Sam",
+      "sent_at": "2026-11-13T23:00:00+05:30",
+      "date_source": "separator",
+      "body": "Fun night. Same again next Friday?"
+    },
+    {
+      "label": "c21",
+      "app": "whatsapp_web",
+      "thread": "sam",
+      "sender": "You",
+      "sent_at": "2026-11-13T23:02:00+05:30",
+      "date_source": "separator",
+      "body": "Sure"
+    },
+    {
+      "label": "c22",
+      "app": "whatsapp_web",
+      "thread": "sam",
+      "sender": "Sam",
+      "sent_at": "2026-11-19T13:05:00+05:30",
+      "date_source": "separator",
+      "body": "Update: I've started eating fish again. Doctor's orders"
+    },
+    {
+      "label": "c23",
+      "app": "whatsapp_web",
+      "thread": "sam",
+      "sender": "Sam",
+      "sent_at": "2026-11-20T23:10:00+05:30",
+      "date_source": "separator",
+      "body": "Thanks for tonight"
+    },
+    {
+      "label": "c24",
+      "app": "whatsapp_web",
+      "thread": "sam",
+      "sender": "Sam",
+      "sent_at": "2026-11-24T18:20:00+05:30",
+      "date_source": "separator",
+      "body": "Dinner Friday, same as last time?"
+    },
+    {
+      "label": "c25",
+      "app": "whatsapp_web",
+      "thread": "sam",
+      "sender": "You",
+      "sent_at": "2026-11-24T18:22:00+05:30",
+      "date_source": "separator",
+      "body": "Yes, same as last time"
+    },
+    {
+      "label": "c26",
+      "app": "whatsapp_web",
+      "thread": "sam",
+      "sender": "Sam",
+      "sent_at": "2026-11-24T18:25:00+05:30",
+      "date_source": "separator",
+      "body": "And brunch Saturday at 9:30 with Arjun?"
+    },
+    {
+      "label": "c27",
+      "app": "whatsapp_web",
+      "thread": "sam",
+      "sender": "You",
+      "sent_at": "2026-11-24T18:26:00+05:30",
+      "date_source": "separator",
+      "body": "Sure, see you both then"
+    },
+    {
+      "label": "c28",
+      "app": "whatsapp_web",
+      "thread": "priya",
+      "sender": "Priya",
+      "sent_at": "2026-11-13T17:20:00+05:30",
+      "date_source": "separator",
+      "body": "My mail is down, can you send the deck here?"
+    },
+    {
+      "label": "c29",
+      "app": "whatsapp_web",
+      "thread": "priya",
+      "sender": "You",
+      "sent_at": "2026-11-13T17:25:00+05:30",
+      "date_source": "separator",
+      "body": "Here is the deck."
+    },
+    {
+      "label": "c30",
+      "app": "whatsapp_web",
+      "thread": "priya",
+      "sender": "You",
+      "sent_at": "2026-11-13T17:26:00+05:30",
+      "date_source": "separator",
+      "body": "deck_v3.pdf"
+    },
+    {
+      "label": "c31",
+      "app": "whatsapp_web",
+      "thread": "priya",
+      "sender": "Priya",
+      "sent_at": "2026-11-13T17:40:00+05:30",
+      "date_source": "separator",
+      "body": "Got it, thanks!"
+    },
+    {
+      "label": "c32",
+      "app": "whatsapp_web",
+      "thread": "priya",
+      "sender": "Priya",
+      "sent_at": "2026-11-23T20:00:00+05:30",
+      "date_source": "separator",
+      "body": "My flight to Delhi is 6E 2134 on December 2. See you at the conference?"
+    },
+    {
+      "label": "c33",
+      "app": "whatsapp_web",
+      "thread": "priya",
+      "sender": "You",
+      "sent_at": "2026-11-23T20:05:00+05:30",
+      "date_source": "separator",
+      "body": "Yes, see you there"
+    },
+    {
+      "label": "c34",
+      "app": "whatsapp_web",
+      "thread": "kapoor",
+      "sender": "Mr. Kapoor",
+      "sent_at": "2026-11-17T16:30:00+05:30",
+      "date_source": "separator",
+      "body": "Thanks for calling. The plumber will come on Thursday."
+    },
+    {
+      "label": "c35",
+      "app": "whatsapp_web",
+      "thread": "kapoor",
+      "sender": "You",
+      "sent_at": "2026-11-17T16:32:00+05:30",
+      "date_source": "separator",
+      "body": "Great, thank you"
+    },
+    {
+      "label": "c36",
+      "app": "whatsapp_web",
+      "thread": "flat-4b",
+      "sender": "Rohan",
+      "sent_at": "2026-11-16T21:00:00+05:30",
+      "date_source": "separator",
+      "body": "The kitchen tap is leaking again"
+    },
+    {
+      "label": "c37",
+      "app": "whatsapp_web",
+      "thread": "flat-4b",
+      "sender": "You",
+      "sent_at": "2026-11-16T21:05:00+05:30",
+      "date_source": "separator",
+      "body": "I'll call the landlord tomorrow about the tap"
+    },
+    {
+      "label": "c38",
+      "app": "whatsapp_web",
+      "thread": "flat-4b",
+      "sender": "Meera",
+      "sent_at": "2026-11-18T09:00:00+05:30",
+      "date_source": "separator",
+      "body": "Can you return my charger today?"
+    },
+    {
+      "label": "c39",
+      "app": "whatsapp_web",
+      "thread": "flat-4b",
+      "sender": "You",
+      "sent_at": "2026-11-18T09:05:00+05:30",
+      "date_source": "separator",
+      "body": "Yes, I'll drop it in your room tonight"
+    },
+    {
+      "label": "c40",
+      "app": "whatsapp_web",
+      "thread": "flat-4b",
+      "sender": "Meera",
+      "sent_at": "2026-11-18T22:00:00+05:30",
+      "date_source": "separator",
+      "body": "Got the charger, thanks"
+    },
+    {
+      "label": "c41",
+      "app": "whatsapp_web",
+      "thread": "flat-4b",
+      "sender": "Rohan",
+      "sent_at": "2026-11-22T11:00:00+05:30",
+      "date_source": "separator",
+      "body": "You owe me 1,200 for the groceries"
+    },
+    {
+      "label": "c42",
+      "app": "whatsapp_web",
+      "thread": "flat-4b",
+      "sender": "You",
+      "sent_at": "2026-11-22T11:10:00+05:30",
+      "date_source": "separator",
+      "body": "I'll pay you back by next Sunday, the 29th"
+    },
+    {
+      "label": "c43",
+      "app": "whatsapp_web",
+      "thread": "family",
+      "sender": "Anu",
+      "sent_at": "2026-11-12T20:30:00+05:30",
+      "date_source": "separator",
+      "body": "Can you send me the photos from Diwali?"
+    },
+    {
+      "label": "c44",
+      "app": "whatsapp_web",
+      "thread": "family",
+      "sender": "You",
+      "sent_at": "2026-11-12T20:35:00+05:30",
+      "date_source": "separator",
+      "body": "Yes, I'll send them this weekend"
+    },
+    {
+      "label": "c45",
+      "app": "whatsapp_web",
+      "thread": "family",
+      "sender": "Mom",
+      "sent_at": "2026-11-21T10:00:00+05:30",
+      "date_source": "separator",
+      "body": "Can you book my train tickets for December 5?"
+    },
+    {
+      "label": "c46",
+      "app": "whatsapp_web",
+      "thread": "family",
+      "sender": "You",
+      "sent_at": "2026-11-21T10:15:00+05:30",
+      "date_source": "separator",
+      "body": "Yes, I'll book them by Friday the 27th"
+    },
+    {
+      "label": "c47",
+      "app": "whatsapp_web",
+      "thread": "family",
+      "sender": "Mom",
+      "sent_at": "2026-11-25T19:00:00+05:30",
+      "date_source": "separator",
+      "body": "Lunch at home on Sunday at 1?"
+    },
+    {
+      "label": "c48",
+      "app": "whatsapp_web",
+      "thread": "family",
+      "sender": "You",
+      "sent_at": "2026-11-25T19:05:00+05:30",
+      "date_source": "separator",
+      "body": "Yes, see you then"
+    }
+  ]
+}

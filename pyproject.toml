@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "screen-memory-engine"
+version = "0.0.1"
+description = "Screen Memory Engine: P0 store and corpus, P1 search-only baseline, P1b scenario C gate"
+requires-python = ">=3.11"
+dependencies = [
+    "mcp>=2.3,<3",
+    "google-genai>=2.0,<3",
+    "sentence-transformers>=3.0",
+    "pyyaml>=6.0",
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+
+[tool.setuptools.packages.find]
+include = ["sme*", "baseline*", "corpus*", "runner*", "harness*"]
+
+[tool.setuptools.package-data]
+"sme.store" = ["schema.sql"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["runs"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

@@ -1,0 +1,62 @@
+# Questions for the P1 search-only baseline.
+# A human judges each saved transcript against the required elements.
+# There is no automated scorer.
+#
+# Scenario A "now": 2026-11-12T20:00:00+05:30 (Thursday)
+# Scenario B "now": 2026-11-13T17:00:00+05:30 (Friday)
+# All times are Asia/Kolkata (IST).
+
+questions:
+  - id: Q1
+    scenario: a
+    question: What time is dinner with Sam?
+    required:
+      - 9:30 PM
+      - Friday November 13
+      - moved from 8
+      - source is Sam's email
+
+  - id: Q2
+    scenario: a
+    question: What should I do first tomorrow?
+    required:
+      - book the table by noon first
+      - then Priya's deck by 6 PM
+      - landlord call listed as undated
+
+  - id: Q3
+    scenario: a
+    question: Do I owe Priya the deck?
+    required:
+      - "yes"
+      - quotes "Yes, I'll send it by 6 PM on Friday."
+      - says there is no sign you sent it
+
+  - id: Q4
+    scenario: a
+    question: Plan my Friday evening
+    required:
+      - table by noon
+      - deck by 6 PM
+      - dinner at 9:30 PM
+      - never says dinner is at 8
+
+  - id: Q5
+    scenario: a
+    question: When is brunch with Sam?
+    required:
+      - Saturday November 14 at 9:30 AM
+
+  - id: Q6
+    scenario: a
+    question: What is Sam's flight number?
+    required:
+      - says it doesn't know
+
+  - id: Q7
+    scenario: b
+    question: Do I owe Priya the deck?
+    required:
+      - "no"
+      - you sent it on November 13
+      - quotes "Here is the deck, attached."
