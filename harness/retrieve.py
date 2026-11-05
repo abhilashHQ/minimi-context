@@ -293,7 +293,8 @@ class Retriever:
                    and float(self.store.vector(x["id"]) @ self.store.vector(m["id"])) >= BASIS_COSINE]
         if not earlier:
             return ""
-        prev = max(earlier, key=lambda x: x["event_at"])
+        prev = max(earlier, key=lambda x: (x["event_at"][:10], x["event_at"][11:16] != "23:59",
+                                          float(self.store.vector(x["id"]) @ self.store.vector(m["id"]))))
         return f"based on [m{prev['id']}] {human_time(prev['event_at'])}{self.history(prev)}"
 
     @staticmethod
