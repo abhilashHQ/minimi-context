@@ -279,7 +279,7 @@ class Retriever:
             " AND said_at <= ? ORDER BY said_at DESC LIMIT 1",
             (src["thread_key"], src["said_at"]),
         ).fetchone()
-        medium = "email" if src["app"] in ("gmail", "gmail_connector") else self._medium(src)
+        medium = {"gmail": "email", "gmail_connector": "email", "whatsapp_web": "WhatsApp"}.get(src["app"], self._medium(src))
         return f" over {medium} with {other['author']}" if other else f" by your {medium}"
 
     def basis(self, m: dict[str, Any], quote: str) -> str:
