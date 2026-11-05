@@ -105,9 +105,9 @@ def main(argv: list[str] | None = None) -> None:
     if not Path(args.db).exists():
         parser.error(f"database not found: {args.db}")
 
-    from harness.text import Embedder
+    from harness.text import LazyEmbedder
 
-    build_server(Retriever(Store(args.db), Embedder())).run("stdio")
+    build_server(Retriever(Store(args.db), LazyEmbedder())).run("stdio")
 
 
 if __name__ == "__main__":

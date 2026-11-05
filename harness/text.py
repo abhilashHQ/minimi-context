@@ -138,3 +138,21 @@ class Embedder:
 
     def one(self, text: str) -> np.ndarray:
         return self.many([text])[0]
+
+
+class LazyEmbedder:
+    """Loads the model on first use, so a server can answer initialize before torch is imported."""
+
+    def __init__(self) -> None:
+        self._inner: Embedder | None = None
+
+    def _get(self) -> Embedder:
+        if self._inner is None:
+            self._inner = Embedder()
+        return self._inner
+
+    def many(self, texts: list[str]) -> np.ndarray:
+        return self._get().many(texts)
+
+    def one(self, text: str) -> np.ndarray:
+        return self._get().one(text)
